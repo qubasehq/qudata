@@ -537,7 +537,7 @@ QuData/
 │   ├── quality.yaml           # Quality scoring thresholds
 │   ├── labels.yaml            # Label schemas
 │   └── templates/             # Configuration templates
-├── src/forge/                 # Main package
+├── src/qudata/                 # Main package
 │   ├── ingest/               # Multi-format data ingestion
 │   │   ├── detector.py       # File type detection
 │   │   ├── pdf.py           # PDF extraction
@@ -1214,7 +1214,7 @@ pre-commit run --all-files
 pytest
 
 # Run with coverage
-pytest --cov=src/forge --cov-report=html
+pytest --cov=src/qudata --cov-report=html
 
 # Run performance benchmarks
 pytest tests/benchmarks/ --benchmark-only
@@ -1521,18 +1521,18 @@ export_path = exporter.export_dataset(
 
 Each module includes detailed README files:
 
-- **[Data Ingestion](src/forge/ingest/README.md)**: Multi-format data ingestion
-- **[Text Cleaning](src/forge/clean/README.md)**: Text cleaning and normalization
-- **[Content Annotation](src/forge/annotate/README.md)**: Content annotation and tagging
-- **[Quality Scoring](src/forge/score/README.md)**: Quality assessment and scoring
-- **[Data Analysis](src/forge/analyze/README.md)**: Analysis and reporting
-- **[Visualization](src/forge/visualize/README.md)**: Dashboards and visualization
-- **[Export Formats](src/forge/export/README.md)**: Export and format generation
-- **[Database Integration](src/forge/database/README.md)**: Database connectivity
-- **[API Gateway](src/forge/api/README.md)**: API interfaces
-- **[Performance Optimization](src/forge/performance/README.md)**: Performance features
-- **[Orchestration](src/forge/orchestrate/README.md)**: Workflow orchestration
-- **[Validation](src/forge/validation/README.md)**: Testing and validation
+- **[Data Ingestion](src/qudata/ingest/README.md)**: Multi-format data ingestion
+- **[Text Cleaning](src/qudata/clean/README.md)**: Text cleaning and normalization
+- **[Content Annotation](src/qudata/annotate/README.md)**: Content annotation and tagging
+- **[Quality Scoring](src/qudata/score/README.md)**: Quality assessment and scoring
+- **[Data Analysis](src/qudata/analyze/README.md)**: Analysis and reporting
+- **[Visualization](src/qudata/visualize/README.md)**: Dashboards and visualization
+- **[Export Formats](src/qudata/export/README.md)**: Export and format generation
+- **[Database Integration](src/qudata/database/README.md)**: Database connectivity
+- **[API Gateway](src/qudata/api/README.md)**: API interfaces
+- **[Performance Optimization](src/qudata/performance/README.md)**: Performance features
+- **[Orchestration](src/qudata/orchestrate/README.md)**: Workflow orchestration
+- **[Validation](src/qudata/validation/README.md)**: Testing and validation
 
 ## 🤝 Contributing
 
