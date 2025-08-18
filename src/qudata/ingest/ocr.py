@@ -218,6 +218,14 @@ class OCRProcessor:
         self.min_confidence = self.config.get("min_confidence", 30.0)
         self.languages = self.config.get("languages", "eng")
         
+        # Configure tesseract executable path if provided
+        tess_cmd = self.config.get("tesseract_cmd") or os.environ.get("TESSERACT_CMD")
+        if tess_cmd:
+            try:
+                pytesseract.pytesseract.tesseract_cmd = tess_cmd
+            except Exception:
+                pass
+        
         # Verify tesseract installation
         try:
             pytesseract.get_tesseract_version()

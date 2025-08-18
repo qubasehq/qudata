@@ -6,14 +6,17 @@ workflows from ingestion through export.
 """
 
 import logging
+import json
 from typing import Dict, List, Any, Optional
+import fnmatch
 from pathlib import Path
 from dataclasses import dataclass, field
 from datetime import datetime
 
 from .models import Document, ProcessingResult, ProcessingError, ErrorSeverity
 from .config import ConfigManager, PipelineConfig
-from .ingest import FileTypeDetector, PlainTextExtractor, PDFExtractor, DocumentExtractor
+from .ingest import FileTypeDetector, PlainTextExtractor, PDFExtractor, DocumentExtractor, OCRExtractor
+from .ingest.files import ExtractorFactory
 from .clean import ComprehensiveCleaningPipeline
 from .annotate import TaxonomyClassifier, MetadataExtractor
 from .score import QualityScorer
@@ -44,7 +47,7 @@ class QuDataPipeline:
     from raw data ingestion through final export for LLM training.
     """
     
-    def __init__(self, config: PipelineConfig = None, config_path: str = None):
+    def __init__(self, config: PipelineConfig = None, config_path: str = None, show_progress: bool = True):
         """
         Initialize the QuData pipeline.
         
@@ -59,21 +62,47 @@ class QuDataPipeline:
         else:
             self.config = config or PipelineConfig()
         
+        # Progress setting
+        self.show_progress = show_progress
+
         # Initialize components
         self._initialize_components()
         
         logger.info("QuData pipeline initialized")
+
+    def _progress(self, iterable, total: Optional[int] = None, desc: str = ""):
+        """Optionally wrap an iterable with a tqdm progress bar."""
+        if not self.show_progress:
+            return iterable
+        try:
+            from tqdm import tqdm  # type: ignore
+            # Prefer a green progress bar if supported by the installed tqdm
+            try:
+                return tqdm(iterable, total=total, desc=desc, colour="green")
+            except TypeError:
+                # Older tqdm may not support the 'colour' argument
+                return tqdm(iterable, total=total, desc=desc)
+        except Exception:
+            return iterable
+    
+    def _print_heading(self, title: str) -> None:
+        """Print a blue heading for stages (uses rich if available)."""
+        try:
+            from rich.console import Console  # type: ignore
+            from rich.text import Text  # type: ignore
+            Console().print(Text(title, style="bold blue"))
+        except Exception:
+            print(f"\n== {title} ==")
     
     def _initialize_components(self):
         """Initialize all pipeline components."""
         # File detection and extraction
         self.file_detector = FileTypeDetector()
-        self.extractors = {
-            'txt': PlainTextExtractor(self.config.ingest.model_dump()),
-            'pdf': PDFExtractor(self.config.ingest.model_dump()),
-            'docx': DocumentExtractor(self.config.ingest.model_dump()),
-        }
-        
+        # Common ingest config for extractors
+        self._ingest_config = self.config.ingest.model_dump()
+        # Dedicated OCR extractor for images (lazy init to avoid hard dependency on Tesseract)
+        self._ocr_extractor = None
+
         # Cleaning pipeline
         self.cleaning_pipeline = ComprehensiveCleaningPipeline(
             self.config.clean.model_dump()
@@ -102,6 +131,43 @@ class QuDataPipeline:
         self.llmbuilder_connector = LLMBuilderConnector(
             self.config.export.model_dump().get('llmbuilder', {})
         )
+
+    def _resolve_extractor(self, file_type: str):
+        """Resolve an extractor for a detected file_type.
+
+        Uses ExtractorFactory for registered types and routes image types to OCR.
+        Returns an extractor instance or None if unsupported.
+        """
+        ft = (file_type or "").lower()
+
+        # Route image formats to OCR
+        from .ingest.ocr import OCRExtractor as _OCR
+        if ft in getattr(_OCR, 'SUPPORTED_IMAGE_FORMATS', set()):
+            if self._ocr_extractor is None:
+                try:
+                    self._ocr_extractor = OCRExtractor(self._ingest_config)
+                except Exception as e:
+                    logger.warning(
+                        "OCR extractor unavailable (likely missing Tesseract). "
+                        f"Cannot process image type '{ft}'. Error: {e}"
+                    )
+                    return None
+            return self._ocr_extractor
+
+        # Use factory for registered types (txt/markdown, pdf, doc/docx, web, structured, etc.)
+        extractor = ExtractorFactory.create_extractor(ft, self._ingest_config)
+        if extractor:
+            return extractor
+
+        # Optional: simple aliasing if ever needed
+        aliases = {
+            'jpeg': 'jpg',  # not used (images handled above), kept for completeness
+        }
+        mapped = aliases.get(ft)
+        if mapped:
+            return ExtractorFactory.create_extractor(mapped, self._ingest_config)
+
+        return None
     
     def process_directory(self, input_dir: str, output_dir: str) -> PipelineResult:
         """
@@ -130,6 +196,7 @@ class QuDataPipeline:
         
         try:
             # Stage 1: Ingestion
+            self._print_heading("Ingest")
             documents = self._ingest_files(input_path)
             result.stage_results['ingestion'] = {
                 'files_found': len(list(input_path.rglob('*'))),
@@ -142,6 +209,7 @@ class QuDataPipeline:
                 return result
             
             # Stage 2: Cleaning
+            self._print_heading("Clean")
             cleaned_documents = self._clean_documents(documents)
             result.stage_results['cleaning'] = {
                 'documents_cleaned': len(cleaned_documents),
@@ -149,29 +217,42 @@ class QuDataPipeline:
             }
             
             # Stage 3: Annotation
+            self._print_heading("Annotate")
             annotated_documents = self._annotate_documents(cleaned_documents)
             result.stage_results['annotation'] = {
                 'documents_annotated': len(annotated_documents)
             }
             
-            # Stage 4: Quality Scoring
-            scored_documents = self._score_documents(annotated_documents)
+            # Stage 4: Language Detection
+            self._print_heading("Language")
+            language_documents = self._detect_languages(annotated_documents)
+            result.stage_results['language_detection'] = {
+                'documents_analyzed': len(language_documents),
+                'languages': list({doc.metadata.language for doc in language_documents})
+            }
+            
+            # Stage 5: Quality Scoring
+            self._print_heading("Score")
+            scored_documents = self._score_documents(language_documents)
             result.stage_results['scoring'] = {
                 'documents_scored': len(scored_documents),
                 'average_quality': self._calculate_average_quality(scored_documents)
             }
             
-            # Stage 5: Content Segmentation
+            # Stage 6: Content Segmentation
+            self._print_heading("Segment")
             segmented_documents = self._segment_documents(scored_documents)
             result.stage_results['segmentation'] = {
                 'documents_segmented': len(segmented_documents)
             }
             
-            # Stage 6: Analysis
+            # Stage 7: Analysis
+            self._print_heading("Analyze")
             analysis_result = self.analysis_engine.analyze_dataset(segmented_documents)
             result.stage_results['analysis'] = analysis_result.to_dict()
             
-            # Stage 7: Export
+            # Stage 8: Export
+            self._print_heading("Export")
             export_paths = self._export_documents(segmented_documents, output_path)
             result.output_paths = export_paths
             result.stage_results['export'] = {
@@ -201,31 +282,69 @@ class QuDataPipeline:
         """Ingest and extract content from files."""
         documents = []
         
-        for file_path in input_path.rglob('*'):
-            if file_path.is_file():
+        # Helpers
+        def _is_ignored(p: Path) -> bool:
+            try:
+                rel = p.relative_to(input_path).as_posix()
+            except Exception:
+                rel = p.as_posix()
+            patterns: List[str] = getattr(self.config.ingest, 'ignore_globs', []) or []
+            for pat in patterns:
+                if fnmatch.fnmatch(rel, pat) or fnmatch.fnmatch(p.as_posix(), pat):
+                    return True
+            return False
+
+        # Pre-list files for accurate progress totals, then filter ignores
+        all_paths = [p for p in input_path.rglob('*') if p.is_file() and not _is_ignored(p)]
+        for file_path in self._progress(all_paths, total=len(all_paths), desc="Ingest"):
+            try:
+                # Skip zero-length files early
                 try:
-                    # Detect file type
-                    file_type = self.file_detector.detect_file_type(str(file_path))
-                    
-                    # Get appropriate extractor
-                    extractor = self.extractors.get(file_type)
-                    if not extractor:
-                        logger.warning(f"No extractor for file type: {file_type}")
+                    if file_path.stat().st_size == 0:
+                        logger.warning(f"Skipping empty file: {file_path}")
                         continue
-                    
-                    # Extract content
-                    extracted = extractor.extract(str(file_path))
-                    
-                    # Create document
-                    from .models import create_document_from_extracted
-                    document = create_document_from_extracted(
-                        extracted, 
-                        f"doc_{len(documents)}"
-                    )
-                    documents.append(document)
-                    
-                except Exception as e:
-                    logger.error(f"Failed to process {file_path}: {e}")
+                except Exception:
+                    pass
+
+                # Detect file type
+                file_type, _confidence = self.file_detector.detect_file_type(str(file_path))
+                
+                # Enforce allowed file types from config.ingest.file_types if provided
+                # Normalize synonyms so 'markdown' matches 'md', etc.
+                type_map = {
+                    'markdown': 'md',
+                    'mdown': 'md',
+                    'mkd': 'md',
+                    'text': 'txt',
+                    'htm': 'html',
+                    'xhtml': 'html',
+                }
+                allowed_types = set(self.config.ingest.file_types or [])
+                allowed_norm = {type_map.get(t.lower(), t.lower()) for t in allowed_types}
+                detected_norm = type_map.get((file_type or '').lower(), (file_type or '').lower())
+                if allowed_norm and detected_norm and detected_norm not in allowed_norm:
+                    logger.warning(f"Skipping unsupported type '{file_type}' for file: {file_path}")
+                    continue
+
+                # Get appropriate extractor
+                extractor = self._resolve_extractor(file_type)
+                if not extractor:
+                    logger.warning(f"No extractor for file type: {file_type}")
+                    continue
+                
+                # Extract content
+                extracted = extractor.extract(str(file_path))
+                
+                # Create document
+                from .models import create_document_from_extracted
+                document = create_document_from_extracted(
+                    extracted, 
+                    f"doc_{len(documents)}"
+                )
+                documents.append(document)
+                
+            except Exception as e:
+                logger.error(f"Failed to process {file_path}: {e}")
         
         return documents
     
@@ -253,7 +372,7 @@ class QuDataPipeline:
         """Annotate documents with metadata and categories."""
         annotated_documents = []
         
-        for document in documents:
+        for document in self._progress(documents, total=len(documents), desc="Annotate"):
             try:
                 # Classify taxonomy
                 category_result = self.taxonomy_classifier.classify_document(document)
@@ -274,11 +393,29 @@ class QuDataPipeline:
         
         return annotated_documents
     
+    def _detect_languages(self, documents: List[Document]) -> List[Document]:
+        """Detect and set language metadata for documents."""
+        detected_documents = []
+        language_analyzer = self.analysis_engine.language_analyzer
+        
+        for document in self._progress(documents, total=len(documents), desc="Language"):
+            try:
+                lang_result = language_analyzer.analyze_document_language(document)
+                # Prefer ISO code for standardized representation
+                iso = lang_result.primary_language.iso_code or "unknown"
+                document.metadata.language = iso
+                detected_documents.append(document)
+            except Exception as e:
+                logger.error(f"Failed to detect language for document {document.id}: {e}")
+                detected_documents.append(document)
+        
+        return detected_documents
+    
     def _score_documents(self, documents: List[Document]) -> List[Document]:
         """Score document quality."""
         scored_documents = []
         
-        for document in documents:
+        for document in self._progress(documents, total=len(documents), desc="Score"):
             try:
                 quality_result = self.quality_scorer.score_document(document)
                 document.metadata.quality_score = quality_result.overall_score
@@ -300,7 +437,7 @@ class QuDataPipeline:
         
         try:
             # Create dataset
-            from .models import Dataset, DatasetMetadata
+            from .models import Dataset, DatasetMetadata, QualityMetrics
             dataset = Dataset(
                 id="processed_dataset",
                 name="QuData Processed Dataset",
@@ -309,13 +446,67 @@ class QuDataPipeline:
                 metadata=DatasetMetadata()
             )
             
-            # Export to LLMBuilder
+            # Compute simple dataset-level quality metrics (average of per-document quality)
+            if documents:
+                avg_quality = sum(doc.metadata.quality_score for doc in documents) / len(documents)
+            else:
+                avg_quality = 0.0
+            dataset.quality_metrics = QualityMetrics(
+                overall_score=avg_quality
+            )
+            
+            # Determine exports root: sibling 'exports' next to provided output directory
+            exports_root = output_path.parent / "exports"
+            exports_root.mkdir(parents=True, exist_ok=True)
+
+            # Export to LLMBuilder under exports
             export_result = self.llmbuilder_connector.export_to_llmbuilder(
-                dataset, str(output_path / "llmbuilder")
+                dataset, str(exports_root / "llmbuilder")
             )
             
             if export_result.success:
                 export_paths['llmbuilder'] = export_result.export_path
+
+            # Additional exports based on config.pack.formats
+            formats: List[str] = self.config.pack.formats if hasattr(self.config.pack, 'formats') else ["jsonl", "chatml", "plain"]
+
+            # Ensure format output directories under exports
+            for fmt in formats:
+                fmt_dir = exports_root / fmt
+                fmt_dir.mkdir(parents=True, exist_ok=True)
+                if fmt == 'jsonl':
+                    jsonl_path = fmt_dir / 'dataset.jsonl'
+                    with open(jsonl_path, 'w', encoding='utf-8') as f:
+                        for doc in documents:
+                            obj = {
+                                "id": doc.id,
+                                "text": doc.content,
+                                "metadata": {
+                                    "source_path": doc.source_path,
+                                    "file_type": doc.metadata.file_type,
+                                    "language": doc.metadata.language,
+                                    "domain": doc.metadata.domain,
+                                    "quality_score": doc.metadata.quality_score,
+                                },
+                            }
+                            f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+                    export_paths['jsonl'] = str(jsonl_path)
+                elif fmt == 'chatml':
+                    chatml_path = fmt_dir / 'dataset.chatml'
+                    with open(chatml_path, 'w', encoding='utf-8') as f:
+                        # Minimal ChatML-style wrapping: one user turn per document
+                        for doc in documents:
+                            f.write("<|im_start|>user\n")
+                            f.write(doc.content.strip() + "\n")
+                            f.write("<|im_end|>\n")
+                    export_paths['chatml'] = str(chatml_path)
+                elif fmt == 'plain':
+                    plain_path = fmt_dir / 'dataset.txt'
+                    with open(plain_path, 'w', encoding='utf-8') as f:
+                        # Join documents with a single blank line; no separators
+                        cleaned_texts = [(doc.content or "").strip() for doc in documents]
+                        f.write("\n\n".join(cleaned_texts) + ("\n" if cleaned_texts else ""))
+                    export_paths['plain'] = str(plain_path)
             
         except Exception as e:
             logger.error(f"Export failed: {e}")
@@ -354,10 +545,10 @@ class QuDataPipeline:
         for file_path in file_paths:
             try:
                 # Detect file type
-                file_type = self.file_detector.detect_file_type(file_path)
+                file_type, _confidence = self.file_detector.detect_file_type(file_path)
                 
                 # Get appropriate extractor
-                extractor = self.extractors.get(file_type)
+                extractor = self._resolve_extractor(file_type)
                 if not extractor:
                     logger.warning(f"No extractor for file type: {file_type}")
                     continue
@@ -386,6 +577,13 @@ class QuDataPipeline:
                 document.metadata.domain = category_result.primary_category
                 document.metadata.topics = category_result.categories
                 
+                # Detect language (before scoring)
+                try:
+                    lang_result = self.analysis_engine.language_analyzer.analyze_document_language(document)
+                    document.metadata.language = (lang_result.primary_language.iso_code or "unknown")
+                except Exception as le:
+                    logger.warning(f"Language detection failed for {document.id}: {le}")
+                
                 # Score document
                 quality_result = self.quality_scorer.score_document(document)
                 document.metadata.quality_score = quality_result.overall_score
@@ -395,24 +593,12 @@ class QuDataPipeline:
             except Exception as e:
                 logger.error(f"Failed to process {file_path}: {e}")
         
-        # Calculate overall quality metrics
+        # Calculate overall quality metrics (simple average for now)
         if documents:
             avg_quality = sum(doc.metadata.quality_score for doc in documents) / len(documents)
-            quality_metrics = QualityMetrics(
-                overall_score=avg_quality,
-                content_quality=avg_quality,
-                metadata_completeness=0.8,  # Placeholder
-                language_consistency=0.9,   # Placeholder
-                domain_relevance=0.7        # Placeholder
-            )
+            quality_metrics = QualityMetrics(overall_score=avg_quality)
         else:
-            quality_metrics = QualityMetrics(
-                overall_score=0.0,
-                content_quality=0.0,
-                metadata_completeness=0.0,
-                language_consistency=0.0,
-                domain_relevance=0.0
-            )
+            quality_metrics = QualityMetrics(overall_score=0.0)
         
         # Create dataset
         dataset = Dataset(

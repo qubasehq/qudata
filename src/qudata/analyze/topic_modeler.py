@@ -99,6 +99,9 @@ class TopicModeler:
         # Try to import optional dependencies
         self.sklearn_available = self._check_sklearn()
         self.bertopic_available = self._check_bertopic()
+        # Strict flags
+        self.strict = bool(self.config.get("strict", False))
+        self.require_bertopic = bool(self.config.get("require_bertopic", False))
         
     def _check_sklearn(self) -> bool:
         """Check if scikit-learn is available."""
@@ -165,6 +168,16 @@ class TopicModeler:
             return self._perform_lda_modeling(documents, num_topics)
         elif method == "bertopic" and self.bertopic_available:
             return self._perform_bertopic_modeling(documents, num_topics)
+        elif method == "bertopic" and not self.bertopic_available:
+            if self.strict or self.require_bertopic:
+                raise RuntimeError("BERTopic requested but not available. Install 'bertopic' and dependencies.")
+            logger.info("BERTopic not available; falling back to simple topic modeling")
+            return self._perform_simple_modeling(documents, num_topics)
+        elif method == "lda" and not self.sklearn_available:
+            if self.strict:
+                raise RuntimeError("LDA requested but scikit-learn is not available. Install 'scikit-learn'.")
+            logger.info("scikit-learn not available; falling back to simple topic modeling")
+            return self._perform_simple_modeling(documents, num_topics)
         else:
             # Fallback to simple keyword-based clustering
             logger.info(f"Using simple topic modeling (method '{method}' not available)")
@@ -269,6 +282,12 @@ class TopicModeler:
         try:
             from bertopic import BERTopic
             from sklearn.feature_extraction.text import CountVectorizer
+            try:
+                from umap import UMAP
+            except Exception:
+                # Some environments provide umap via umap-learn as module 'umap'
+                from umap import UMAP  # type: ignore
+            from hdbscan import HDBSCAN
         except ImportError:
             logger.error("BERTopic not available")
             return self._perform_simple_modeling(documents, num_topics)
@@ -284,10 +303,31 @@ class TopicModeler:
         )
         
         try:
+            n_docs = max(1, len(processed_docs))
+            # Safer defaults for small datasets to avoid UMAP spectral k >= N issues
+            # n_neighbors must be < n_docs; ensure minimum of 2 when possible
+            n_neighbors = 2 if n_docs > 2 else 1
+            # n_components should be < n_docs to avoid k >= N; keep at most 2
+            n_components = 2 if n_docs > 2 else 1
+            umap_model = UMAP(
+                n_neighbors=n_neighbors,
+                n_components=n_components,
+                metric="cosine",
+                random_state=42,
+                low_memory=True
+            )
+            # HDBSCAN with small cluster sizes for tiny datasets
+            hdbscan_model = HDBSCAN(min_cluster_size=min(5, max(2, n_docs // 2 or 2)),
+                                    min_samples=1,
+                                    prediction_data=True)
+            
             # Initialize BERTopic model
             topic_model = BERTopic(
                 nr_topics=num_topics,
                 vectorizer_model=vectorizer_model,
+                umap_model=umap_model,
+                hdbscan_model=hdbscan_model,
+                calculate_probabilities=False,
                 verbose=False
             )
             

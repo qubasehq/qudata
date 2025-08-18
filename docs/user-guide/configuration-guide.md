@@ -39,6 +39,26 @@ export:
   split_data: true
 ```
 
+## Project Initialization
+
+Initialize a new QuData project with the CLI to create a ready-to-use folder layout and starter config:
+
+```bash
+qudata init               # in current directory
+qudata init --path myproj # in a specific directory
+qudata init --force       # overwrite existing scaffold files
+```
+
+This scaffolds:
+
+- `data/raw/` for input files
+- `data/processed/` for pipeline outputs
+- `exports/jsonl/`, `exports/chatml/`, `exports/llmbuilder/`, `exports/plain/` for exports by format
+- `configs/` with a starter `pipeline.yaml`
+- `QUICKSTART.md` with basic usage instructions
+
+You can customize `configs/pipeline.yaml` as described below.
+
 ## Pipeline Configuration
 
 ### Basic Pipeline Settings

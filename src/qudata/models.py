@@ -167,6 +167,15 @@ class ProcessingError(Exception):
     stack_trace: Optional[str] = None
     context: Dict[str, Any] = field(default_factory=dict)
     
+    def __str__(self) -> str:
+        # Provide a helpful string representation for logging
+        base = f"{self.error_type}: {self.message}"
+        if self.stage:
+            base = f"[{self.stage}] " + base
+        if self.document_id:
+            base += f" (doc={self.document_id})"
+        return base
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert error to dictionary for serialization."""
         return {

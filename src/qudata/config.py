@@ -37,6 +37,18 @@ class IngestConfig(BaseConfig):
     file_types: List[str] = Field(default=["txt", "md", "html", "pdf", "docx", "epub"])
     max_file_size: str = Field(default="100MB")
     parallel_workers: int = Field(default=4, ge=1, le=16)
+    # Glob patterns to ignore during ingestion file discovery
+    ignore_globs: List[str] = Field(default_factory=lambda: [
+        "**/.git/**",
+        "**/.svn/**",
+        "**/.hg/**",
+        "**/__pycache__/**",
+        "**/node_modules/**",
+        "**/.DS_Store",
+        "**/Thumbs.db",
+        # Commonly noisy/unwanted types
+        "**/*.xml",
+    ])
     
     @field_validator('max_file_size')
     @classmethod
@@ -155,6 +167,8 @@ class PipelineConfig(BaseConfig):
     score: ScoreConfig = Field(default_factory=ScoreConfig)
     pack: PackConfig = Field(default_factory=PackConfig)
     export: ExportConfig = Field(default_factory=ExportConfig)
+    # Optional analysis configuration blob to pass through to AnalysisEngine
+    analysis: Dict[str, Any] = Field(default_factory=dict)
     
     # Global settings
     parallel_processing: bool = True

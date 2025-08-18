@@ -8,8 +8,20 @@ import asyncio
 import json
 import sys
 import time
+import shutil
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+from importlib.metadata import version as _pkg_version, PackageNotFoundError
+
+# Resolve package version for --version flag
+try:
+    _QUVERSION = _pkg_version("qudata")
+except PackageNotFoundError:
+    try:
+        from . import __version__ as _local_version  # fallback to source version
+        _QUVERSION = _local_version
+    except Exception:
+        _QUVERSION = "unknown"
 
 def main():
     """Main CLI entry point."""
@@ -26,8 +38,15 @@ Examples:
   qudata analyze --dataset my-dataset --output analysis.json
         """
     )
+    # Global --version flag
+    parser.add_argument('-V', '--version', action='version', version=f"QuData {_QUVERSION}")
     
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    
+    # Init command
+    init_parser = subparsers.add_parser('init', help='Initialize a new QuData project in a folder')
+    init_parser.add_argument('--path', default='.', help='Target directory to initialize (default: current directory)')
+    init_parser.add_argument('--force', action='store_true', help='Overwrite existing files if they already exist')
     
     # Process command
     process_parser = subparsers.add_parser('process', help='Run full processing pipeline')
@@ -37,6 +56,7 @@ Examples:
     process_parser.add_argument('--format', default='jsonl', choices=['jsonl', 'chatml', 'alpaca', 'plain'], help='Output format')
     process_parser.add_argument('--parallel', type=int, default=1, help='Number of parallel workers')
     process_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
+    process_parser.add_argument('--progress', action='store_true', help='Show progress bars during processing')
     
     # Export command
     export_parser = subparsers.add_parser('export', help='Export processed data')
@@ -130,6 +150,9 @@ Examples:
     config_template_parser.add_argument('--type', choices=['pipeline', 'quality', 'taxonomy'], default='pipeline', help='Template type')
     
     args = parser.parse_args()
+
+    # Print brand banner for any command
+    _print_branding()
     
     if not args.command:
         parser.print_help()
@@ -152,6 +175,8 @@ Examples:
             return run_dataset_command(args)
         elif args.command == 'config':
             return run_config_command(args)
+        elif args.command == 'init':
+            return run_init_command(args)
         else:
             print(f"Unknown command: {args.command}")
             return 1
@@ -173,8 +198,45 @@ def run_process_command(args):
     print(f"Processing {args.input} -> {args.output}")
     print(f"Using config: {args.config}")
     
+    # Configure logging and suppress known noisy PDF warnings while keeping real errors visible
+    try:
+        import logging
+
+        # Honor verbosity flag
+        logging.basicConfig(level=logging.DEBUG if getattr(args, 'verbose', False) else logging.INFO)
+
+        class _PdfColorWarningFilter(logging.Filter):
+            """Filter out noisy pdfminer color warnings like:
+            "Cannot set gray non-stroke color because /'P120' is an invalid float value"
+            """
+
+            def filter(self, record: logging.LogRecord) -> bool:
+                msg = record.getMessage()
+                if (
+                    "Cannot set gray non-stroke color" in msg
+                    and "invalid float value" in msg
+                ):
+                    return False
+                return True
+
+        noisy_pdf_loggers = [
+            logging.getLogger("pdfminer"),
+            logging.getLogger("pdfminer.pdfinterp"),
+            logging.getLogger("pdfminer.converter"),
+            logging.getLogger("pdfminer.cmapdb"),
+            logging.getLogger("pdfminer.image"),
+        ]
+        for lg in noisy_pdf_loggers:
+            lg.addFilter(_PdfColorWarningFilter())
+            # Keep them at WARNING unless verbose is on
+            if not getattr(args, 'verbose', False):
+                lg.setLevel(logging.WARNING)
+    except Exception:
+        # Best-effort; continue if logging setup fails
+        pass
+
     # Initialize pipeline
-    pipeline = QuDataPipeline(config_path=args.config)
+    pipeline = QuDataPipeline(config_path=args.config, show_progress=getattr(args, 'progress', False))
     
     # Run processing
     result = pipeline.process_directory(args.input, args.output)
@@ -505,6 +567,219 @@ def run_config_command(args):
             return 1
     
     return 0
+
+
+def run_init_command(args):
+    """Initialize a new QuData project directory with standard structure and instructions."""
+    base = Path(args.path).resolve()
+    print(f"🧰 Initializing QuData project at: {base}")
+    
+    # Define directories (top-level 'raw' and 'processed')
+    dirs = [
+        base / 'raw',
+        base / 'processed',
+        base / 'exports' / 'llmbuilder',
+        base / 'exports' / 'jsonl',
+        base / 'exports' / 'chatml',
+        base / 'exports' / 'plain',
+        base / 'configs'
+    ]
+    
+    for d in dirs:
+        d.mkdir(parents=True, exist_ok=True)
+    
+    # Determine configs to use/copy
+    target_configs_dir = base / 'configs'
+    existing_yaml = list(target_configs_dir.glob('*.yml')) + list(target_configs_dir.glob('*.yaml'))
+    used_config_path: Optional[Path] = None
+
+    if existing_yaml and not args.force:
+        # Keep what's already there
+        print(f"ℹ️  Found existing configs in {target_configs_dir}; not overwriting. Use --force to replace.")
+        # Prefer an existing pipeline.yaml reference if present
+        pipeline_yaml_candidates = [p for p in existing_yaml if p.name == 'pipeline.yaml']
+        used_config_path = pipeline_yaml_candidates[0] if pipeline_yaml_candidates else existing_yaml[0]
+    else:
+        # Try to copy YAMLs from repository-level configs folders
+        repo_cand_dirs = [
+            Path.cwd() / 'configs' / 'configs',  # e.g., repo has configs/configs/
+            Path.cwd() / 'configs',              # e.g., repo has configs/
+        ]
+        copied_any = False
+        for src_dir in repo_cand_dirs:
+            if src_dir.resolve() == target_configs_dir.resolve():
+                continue
+            if src_dir.is_dir():
+                to_copy = [p for p in src_dir.rglob('*') if p.is_file()]
+                for sf in to_copy:
+                    rel = sf.relative_to(src_dir)
+                    dest = target_configs_dir / rel
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    if dest.exists() and not args.force:
+                        continue
+                    try:
+                        shutil.copy2(sf, dest)
+                        copied_any = True
+                        print(f"📝 Copied config: {sf} -> {dest}")
+                    except Exception as e:
+                        print(f"⚠️  Failed to copy {sf} -> {dest}: {e}")
+                if copied_any:
+                    break
+        # If none copied (or we forced), ensure we have baseline default configs
+        existing_yaml = list(target_configs_dir.glob('*.yml')) + list(target_configs_dir.glob('*.yaml'))
+        pipeline_cfg_path = target_configs_dir / 'pipeline.yaml'
+        taxonomy_cfg_path = target_configs_dir / 'taxonomy.yaml'
+        quality_cfg_path = target_configs_dir / 'quality.yaml'
+        cleansing_rules_path = target_configs_dir / 'cleansing_rules.yaml'
+
+        # Write pipeline.yaml
+        if not existing_yaml or (args.force and not pipeline_cfg_path.exists()):
+            pipeline_cfg_content = """
+version: '1.0'
+stages:
+  - ingest
+  - clean
+  - annotate
+  - score
+  - export
+
+input_path: raw
+output_path: processed
+
+quality_thresholds:
+  min_length: 10
+  max_length: 10000
+  min_quality_score: 0.5
+
+export:
+  formats: [jsonl, chatml, plain]
+  llmbuilder: true
+""".lstrip()
+            pipeline_cfg_path.write_text(pipeline_cfg_content, encoding='utf-8')
+            print(f"📝 Wrote starter config: {pipeline_cfg_path}")
+        
+        # Write taxonomy.yaml
+        if args.force or not taxonomy_cfg_path.exists():
+            taxonomy_cfg_content = """
+version: '1.0'
+default_domain: uncategorized
+min_confidence: 0.3
+domains:
+  technical:
+    keywords: [programming, engineering, science, software, code]
+    patterns: ["\\b(api|sdk|library|framework)s?\\b"]
+  business:
+    keywords: [finance, marketing, management, sales, revenue]
+    patterns: ["\\b(kpi|roi|crm)s?\\b"]
+  general:
+    keywords: [news, entertainment, lifestyle]
+    patterns: []
+categories: []
+topics: {}
+""".lstrip()
+            taxonomy_cfg_path.write_text(taxonomy_cfg_content, encoding='utf-8')
+            print(f"📝 Wrote starter config: {taxonomy_cfg_path}")
+
+        # Write quality.yaml
+        if args.force or not quality_cfg_path.exists():
+            quality_cfg_content = """
+version: '1.0'
+thresholds:
+  min_length: 10
+  max_length: 10000
+  min_language_confidence: 0.8
+  min_coherence_score: 0.6
+scoring_weights:
+  length: 0.2
+  language: 0.2
+  coherence: 0.3
+  uniqueness: 0.3
+""".lstrip()
+            quality_cfg_path.write_text(quality_cfg_content, encoding='utf-8')
+            print(f"📝 Wrote starter config: {quality_cfg_path}")
+
+        # Write cleansing_rules.yaml (minimal defaults)
+        if args.force or not cleansing_rules_path.exists():
+            cleansing_rules_content = """
+version: '1.0'
+rules:
+  normalize_whitespace: true
+  strip_html: true
+  remove_boilerplate: true
+  dedupe_lines: true
+  lower_case: false
+languages:
+  allow: []  # e.g., [en]
+filters:
+  min_chars: 10
+  max_chars: 100000
+""".lstrip()
+            cleansing_rules_path.write_text(cleansing_rules_content, encoding='utf-8')
+            print(f"📝 Wrote starter config: {cleansing_rules_path}")
+
+        # Set used_config_path reference
+        if pipeline_cfg_path.exists():
+            used_config_path = pipeline_cfg_path
+        elif existing_yaml:
+            used_config_path = existing_yaml[0]
+    
+    
+    # Instructions README
+    readme_path = base / 'QUICKSTART.md'
+    if not readme_path.exists() or args.force:
+        # Choose a config reference for docs
+        config_ref = f"configs/{used_config_path.name}" if used_config_path else "configs/pipeline.yaml"
+        readme_content = f"""
+# QuData Project Quickstart
+
+This directory was initialized by `qudata init` on {time.strftime('%Y-%m-%d %H:%M:%S')}.
+
+## Structure
+- `raw/`               Put your source text files here (.txt, .md, etc.)
+- `processed/`         Pipeline outputs and intermediate artifacts
+- `exports/`           Final exports for training (jsonl/chatml/plain/llmbuilder)
+- `configs/`           Configuration files (see `{config_ref}`)
+
+## Typical Workflow
+1. Add your input files to `raw/`.
+2. Run the processing pipeline:
+   ```bash
+   qudata process --input raw --output processed --config {config_ref} --verbose --progress
+   ```
+3. Check exports printed at the end (also under `exports/`).
+4. Inspect LLMBuilder manifest at `exports/llmbuilder/manifest.json`.
+
+## Notes
+- Edit `{config_ref}` to adjust stages and thresholds.
+- Re-run `qudata process` any time you change inputs or config.
+"""
+        readme_path.write_text(readme_content, encoding='utf-8')
+        print(f"📄 Wrote instructions: {readme_path}")
+    else:
+        print(f"ℹ️  Instructions exist, not overwriting: {readme_path} (use --force to overwrite)")
+    
+    print("✅ Project initialized!")
+    return 0
+
+
+def _print_branding() -> None:
+    """Print 'QuData by Qubase' heading using only green/white styles if Rich is available.
+
+    Falls back to plain text without colors when Rich isn't installed or on error.
+    """
+    try:
+        from rich.console import Console  # type: ignore
+        from rich.text import Text  # type: ignore
+
+        console = Console()
+        line = Text()
+        line.append("QuData", style="bold green")
+        line.append(" by ", style="bold white")
+        line.append("Q u b △ s e", style="bold green")
+        console.print(line)
+    except Exception:
+        # Plain fallback
+        print("QuD△ta by Qub△se")
 
 
 # Ensure CLI entrypoint runs after all handlers are defined

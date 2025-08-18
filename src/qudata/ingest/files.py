@@ -47,9 +47,46 @@ class PlainTextExtractor(BaseExtractor):
                 - preserve_whitespace: Whether to preserve original whitespace
         """
         super().__init__(config)
-        self.max_file_size = self.config.get('max_file_size', 100 * 1024 * 1024)  # 100MB
+        self.max_file_size = self._coerce_size(self.config.get('max_file_size', 100 * 1024 * 1024))  # 100MB default
         self.encoding_detection = self.config.get('encoding_detection', True)
         self.preserve_whitespace = self.config.get('preserve_whitespace', False)
+
+    def _coerce_size(self, value: Any) -> int:
+        """Convert size config to integer bytes. Accepts int or strings like '100MB', '50kb'."""
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            s = value.strip().lower()
+            try:
+                # Pure number string
+                return int(float(s))
+            except ValueError:
+                pass
+            # Parse with unit suffix
+            units = {
+                'b': 1,
+                'kb': 1024,
+                'k': 1024,
+                'mb': 1024**2,
+                'm': 1024**2,
+                'gb': 1024**3,
+                'g': 1024**3,
+                'tb': 1024**4,
+                't': 1024**4,
+            }
+            # split number and unit
+            import re
+            m = re.match(r"^\s*([0-9]*\.?[0-9]+)\s*([a-zA-Z]+)\s*$", s)
+            if m:
+                num = float(m.group(1))
+                unit = m.group(2)
+                factor = units.get(unit, None)
+                if factor is not None:
+                    return int(num * factor)
+        # Fallback: default 100MB
+        return 100 * 1024 * 1024
     
     def extract(self, file_path: str) -> ExtractedContent:
         """
@@ -83,6 +120,10 @@ class PlainTextExtractor(BaseExtractor):
             # Detect encoding and read content
             content = self._read_file_content(file_path)
             
+            # If markdown, normalize markdown syntax to readable plain text
+            if file_metadata.file_type in ['markdown', 'md', 'mdown', 'mkd']:
+                content = self._markdown_to_text(content)
+
             # Create extracted content object
             extracted = ExtractedContent(content, file_metadata)
             
@@ -235,6 +276,68 @@ class PlainTextExtractor(BaseExtractor):
         content = content.strip()
         
         return content
+    
+    def _markdown_to_text(self, content: str) -> str:
+        """
+        Convert common Markdown syntax to clean plain text with sensible spacing.
+        This is a lightweight transform to avoid adding heavy deps.
+        """
+        text = content
+        # Normalize line endings first
+        text = text.replace('\r\n', '\n').replace('\r', '\n')
+
+        # Remove front-matter fences if present (--- ... --- at top)
+        text = re.sub(r'^---\n[\s\S]*?\n---\n', '', text, flags=re.MULTILINE)
+
+        # Headings: ensure blank line before and after, drop leading #
+        def _heading_repl(m):
+            title = m.group(2).strip()
+            return f"\n\n{title}\n\n"
+        text = re.sub(r'^(#{1,6})\s+(.*)$', _heading_repl, text, flags=re.MULTILINE)
+
+        # Images: ![alt](url) -> alt
+        text = re.sub(r'!\[([^\]]*)\]\([^)]*\)', r'\1', text)
+
+        # Links: [text](url) -> text
+        text = re.sub(r'\[([^\]]+)]\([^)]*\)', r'\1', text)
+
+        # Inline code: `code` -> code
+        text = re.sub(r'`([^`]+)`', r'\1', text)
+
+        # Bold/italic: **text** or *text* or __text__ or _text_ -> text
+        text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+        text = re.sub(r'\*([^*]+)\*', r'\1', text)
+        text = re.sub(r'__([^_]+)__', r'\1', text)
+        text = re.sub(r'_([^_]+)_', r'\1', text)
+
+        # Code fences: remove the ```lang fences but keep code content
+        text = re.sub(r'^```.*$\n?', '', text, flags=re.MULTILINE)
+
+        # Lists: ensure a single space after dash/asterisk and keep one item per line
+        text = re.sub(r'^(\s*)[-*]\s*', r'\1- ', text, flags=re.MULTILINE)
+        text = re.sub(r'^(\s*)\d+\.[\t ]*', r'\1- ', text, flags=re.MULTILINE)
+
+        # Blockquotes: > text -> text
+        text = re.sub(r'^\s*>\s?', '', text, flags=re.MULTILINE)
+
+        # Tables: drop Markdown table pipes but keep cell text separated by spaces
+        # Replace table header separators like |---|---|
+        text = re.sub(r'^\s*\|?[\s:\-\|]+\|\s*$', '', text, flags=re.MULTILINE)
+        # Replace pipes with a single space
+        text = re.sub(r'\s*\|\s*', ' ', text)
+
+        # Remove residual HTML entities lightly
+        text = re.sub(r'&nbsp;?', ' ', text)
+
+        # Collapse excessive internal spaces but preserve paragraph breaks
+        # First collapse spaces/tabs within lines
+        text = re.sub(r'[ \t]+', ' ', text)
+        # Trim spaces at line ends
+        text = re.sub(r'[ \t]+\n', '\n', text)
+        # Collapse 3+ newlines into 2
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        # Strip leading/trailing whitespace
+        return text.strip()
     
     def _analyze_text_structure(self, content: str) -> DocumentStructure:
         """

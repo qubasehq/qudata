@@ -8,7 +8,7 @@ configurable rules from YAML configuration files.
 import re
 import yaml
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Union
 from dataclasses import dataclass
 
 from ..models import Document, DocumentMetadata, ProcessingError, ErrorSeverity
@@ -29,6 +29,13 @@ class CategoryResult:
         if self.matched_patterns is None:
             self.matched_patterns = []
 
+
+@dataclass
+class ClassificationResult:
+    """Result of document-level classification for pipeline usage."""
+    primary_category: str
+    categories: List[str]
+    confidence: float
 
 @dataclass
 class TaxonomyConfig:
@@ -54,14 +61,19 @@ class TaxonomyConfig:
 class TaxonomyClassifier:
     """Rule-based domain and topic categorization system."""
     
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: Optional[Union[str, Dict[str, Any]]] = None):
         """
         Initialize the taxonomy classifier.
         
         Args:
             config_path: Path to taxonomy configuration file. If None, uses default.
         """
-        self.config_path = config_path or "configs/taxonomy.yaml"
+        # Allow being passed a dict (e.g., from PipelineConfig.model_dump()).
+        # If a dict or other non-path object is provided, fall back to default file.
+        if isinstance(config_path, (dict, list)) or config_path is None:
+            self.config_path = "configs/taxonomy.yaml"
+        else:
+            self.config_path = config_path
         self.config = self._load_config()
         self._compiled_patterns = self._compile_patterns()
     
@@ -85,13 +97,20 @@ class TaxonomyClassifier:
                 severity=ErrorSeverity.CRITICAL
             )
     
+    def _normalize_domain_config(self, domain_config: Any) -> Dict[str, Any]:
+        """Normalize domain config: if it's a list, treat as keywords list."""
+        if isinstance(domain_config, dict):
+            return domain_config
+        if isinstance(domain_config, list):
+            return {"keywords": domain_config, "patterns": []}
+        # Fallback to empty config
+        return {"keywords": [], "patterns": []}
+
     def _compile_patterns(self) -> Dict[str, List[re.Pattern]]:
         """Compile regex patterns for each domain."""
         compiled = {}
-        for domain, domain_config in self.config.domains.items():
-            # Ensure domain_config is a dictionary
-            if not isinstance(domain_config, dict):
-                continue
+        for domain, raw_cfg in self.config.domains.items():
+            domain_config = self._normalize_domain_config(raw_cfg)
             patterns = domain_config.get('patterns', [])
             compiled[domain] = [re.compile(pattern, re.IGNORECASE) for pattern in patterns]
         return compiled
@@ -157,7 +176,7 @@ class TaxonomyClassifier:
         )
     
     def _score_domain(self, content_lower: str, content: str, domain: str, 
-                     domain_config: Dict[str, Any]) -> Tuple[float, List[str], List[str]]:
+                     domain_config: Any) -> Tuple[float, List[str], List[str]]:
         """
         Score how well content matches a specific domain.
         
@@ -174,6 +193,9 @@ class TaxonomyClassifier:
         matched_keywords = []
         matched_patterns = []
         
+        # Normalize config to dict shape
+        domain_config = self._normalize_domain_config(domain_config)
+
         # Score based on keyword matches
         keywords = domain_config.get('keywords', [])
         for keyword in keywords:
@@ -192,6 +214,21 @@ class TaxonomyClassifier:
                 matched_patterns.append(domain_config.get('patterns', [])[i])
         
         return score, matched_keywords, matched_patterns
+    
+    def classify_document(self, document: Document) -> ClassificationResult:
+        """Classify a Document and return structure expected by the pipeline.
+        Maps internal CategoryResult -> ClassificationResult with fields
+        primary_category and categories.
+        """
+        result = self.categorize_content(document.content)
+        primary = result.domain
+        # Provide a simple categories list; can be extended to topics in future
+        categories = [primary] if primary else []
+        return ClassificationResult(
+            primary_category=primary,
+            categories=categories,
+            confidence=result.confidence,
+        )
     
     def get_available_domains(self) -> List[str]:
         """Get list of available domains."""
@@ -220,15 +257,8 @@ class TaxonomyClassifier:
             )
         
         # Validate each domain has required fields
-        for domain, domain_config in self.config.domains.items():
-            if not isinstance(domain_config, dict):
-                raise ProcessingError(
-                    stage="taxonomy_validation",
-                    error_type="ConfigurationError",
-                    message=f"Domain '{domain}' configuration must be a dictionary",
-                    severity=ErrorSeverity.HIGH
-                )
-            
+        for domain, raw_cfg in self.config.domains.items():
+            domain_config = self._normalize_domain_config(raw_cfg)
             # Check for keywords or patterns
             keywords = domain_config.get('keywords', [])
             patterns = domain_config.get('patterns', [])

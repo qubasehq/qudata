@@ -1,4 +1,4 @@
-# QuData
+# QuD△ta
 
 **A comprehensive LLM data processing system designed to transform raw multi-format data into high-quality training datasets optimized for Large Language Models.**
 
@@ -6,13 +6,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-QuData focuses on tool usage, knowledge recall, and instruction-following capabilities while maintaining privacy through offline processing and supporting both CPU-only and GPU-accelerated environments.
+QuD△ta focuses on tool usage, knowledge recall, and instruction-following capabilities while maintaining privacy through offline processing and supporting both CPU-only and GPU-accelerated environments.
 
 ## 🚀 Complete Beginner's Guide
 
-### What is QuData?
+### What is QuD△ta?
 
-QuData is like a smart assistant that takes messy documents (PDFs, Word files, web pages, etc.) and turns them into clean, organized data that AI models can learn from. Think of it as a document processing factory that:
+QuD△ta is like a smart assistant that takes messy documents (PDFs, Word files, web pages, etc.) and turns them into clean, organized data that AI models can learn from. Think of it as a document processing factory that:
 
 - **Reads** documents in many formats (PDF, Word, HTML, text files, etc.)
 - **Cleans** the text (removes junk, fixes errors, removes duplicates)
@@ -56,13 +56,23 @@ pip install -e ".[dev]"
 
 ### Your First Document Processing (5 Minutes)
 
-**Step 1: Prepare your documents**
+**Step 1: Initialize your project (recommended)**
 ```bash
-# Create folders for your files
-mkdir -p data/raw data/processed data/exports
+# Create the standard QuData project structure in the current directory
+qudata init
+
+# Or specify a target directory
+qudata init --path my-qudata-project
 
 # Put your documents in data/raw/
 # You can use PDFs, Word documents, text files, HTML files, etc.
+```
+
+Alternatively, set up folders manually:
+```bash
+mkdir -p data/raw data/processed
+mkdir -p exports/jsonl exports/chatml exports/llmbuilder exports/plain
+mkdir -p configs
 ```
 
 **Step 2: Process your documents**
@@ -79,7 +89,7 @@ qudata process --input data/raw --output data/processed
 **Step 3: Export for AI training**
 ```bash
 # Convert processed documents to AI training format
-qudata export --format jsonl --input data/processed --output data/exports/training.jsonl
+qudata export --format jsonl --input data/processed --output exports/jsonl/training.jsonl
 
 # This creates a file that AI systems can use for training
 ```
@@ -126,11 +136,11 @@ qudata export --format parquet --input data/processed --output training.parquet
 **Split data for AI training:**
 ```bash
 # Split into training, validation, and test sets (80%, 10%, 10%)
-qudata export --format jsonl --input data/processed --output data/exports --split
+qudata export --format jsonl --input data/processed --output exports/jsonl --split
 
-# This creates three files:
+# This creates three files under exports/jsonl/:
 # - train.jsonl (80% of your data)
-# - validation.jsonl (10% of your data)  
+# - validation.jsonl (10% of your data)
 # - test.jsonl (10% of your data)
 ```
 
@@ -472,11 +482,14 @@ Once you're comfortable with the basics:
 
 **Essential Commands:**
 ```bash
+# Initialize a project
+qudata init --path my-qudata-project
+
 # Process documents
 qudata process --input data/raw --output data/processed
 
 # Export for AI training
-qudata export --format jsonl --input data/processed --output training.jsonl --split
+qudata export --format jsonl --input data/processed --output exports/jsonl --split
 
 # Analyze quality
 qudata analyze --input data/processed --output analysis.json
@@ -628,8 +641,12 @@ QuData/
 ├── data/                     # Data directories
 │   ├── raw/                  # Input data
 │   ├── staging/              # Intermediate files
-│   ├── processed/            # Cleaned data
-│   └── exports/              # Final datasets
+│   └── processed/            # Cleaned data
+├── exports/                  # Final datasets (by format)
+│   ├── jsonl/
+│   ├── chatml/
+│   ├── llmbuilder/
+│   └── plain/
 ├── docs/                     # Documentation
 │   ├── user-guide/           # User guides
 │   ├── api/                  # API documentation
