@@ -1,0 +1,140 @@
+# Basic QuData Pipeline Configuration
+# This template provides a simple configuration for getting started with QuData
+
+# Pipeline metadata
+name: "basic-pipeline"
+version: "1.0"
+description: "Basic configuration for document processing"
+
+# Input data ingestion settings
+ingest:
+  # Supported file formats
+  formats: ["pdf", "docx", "txt", "html"]
+  
+  # Maximum file size to process
+  max_file_size: "100MB"
+  
+  # Enable parallel processing for better performance
+  parallel_processing: true
+  max_workers: 4
+  
+  # OCR settings for scanned documents
+  ocr_enabled: true
+  ocr_languages: ["eng"]
+  ocr_confidence_threshold: 0.8
+
+# Data cleaning and preprocessing
+clean:
+  # Remove duplicate content
+  remove_duplicates: true
+  similarity_threshold: 0.9
+  
+  # Quality filtering
+  min_quality_score: 0.7
+  
+  # Language filtering (keep only English)
+  language_filter: ["en"]
+  language_confidence_threshold: 0.8
+  
+  # Content cleaning
+  remove_boilerplate: true
+  remove_html_tags: true
+  normalize_whitespace: true
+  
+  # Text normalization
+  unicode_normalization: "NFKC"
+  remove_accents: false
+  lowercase: false
+
+# Content annotation and metadata extraction
+annotate:
+  # Named Entity Recognition
+  enable_ner: true
+  ner_model: "en_core_web_sm"
+  ner_confidence_threshold: 0.8
+  
+  # Content classification
+  enable_classification: true
+  taxonomy_file: "configs/taxonomy.yaml"
+  
+  # Quality scoring weights
+  quality_scoring:
+    weights:
+      length: 0.2
+      language: 0.3
+      coherence: 0.3
+      uniqueness: 0.2
+    thresholds:
+      min_length: 100
+      max_length: 10000
+
+# Quality assessment and scoring
+score:
+  # Enable quality scoring
+  enabled: true
+  
+  # Quality thresholds
+  min_quality_score: 0.7
+  max_quality_score: 1.0
+  
+  # Scoring dimensions
+  dimensions:
+    - length
+    - language
+    - coherence
+    - uniqueness
+
+# Data packaging and export
+pack:
+  # Output formats to generate
+  formats: ["jsonl", "chatml"]
+  
+  # JSONL format settings
+  jsonl:
+    fields: ["text", "metadata", "quality_score"]
+    filter_low_quality: true
+    min_quality_score: 0.7
+  
+  # ChatML format settings
+  chatml:
+    system_message: "You are a helpful assistant."
+    include_metadata: true
+
+# Final export settings
+export:
+  # Output directory
+  output_dir: "/data/processed"
+  
+  # Dataset splitting
+  splits:
+    enabled: true
+    ratios: [0.8, 0.1, 0.1]  # train, validation, test
+    random_seed: 42
+  
+  # Metadata to include
+  include_metadata: true
+  metadata_fields: ["source", "quality_score", "language"]
+
+# Performance and resource management
+performance:
+  # Memory management
+  max_memory_usage: "4GB"
+  batch_size: 50
+  
+  # Caching
+  caching:
+    enabled: true
+    cache_dir: "/tmp/qudata_cache"
+    cache_size: "1GB"
+
+# Logging and monitoring
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/pipeline.log"
+  
+# Error handling
+error_handling:
+  continue_on_error: true
+  max_errors: 100
+  error_log: "logs/errors.log"

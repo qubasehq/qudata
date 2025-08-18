@@ -1,0 +1,364 @@
+# Web Content Processing Template
+# Optimized for processing web articles, blog posts, and online content
+
+pipeline:
+  name: "web_content"
+  version: "1.0.0"
+  description: "Processing web articles and blog posts for LLM training"
+  
+  # Processing settings optimized for web content
+  parallel_processing: true
+  max_workers: 8  # Web content is typically smaller, can handle more workers
+  batch_size: 200  # Larger batches for smaller web articles
+  
+  # Memory management
+  max_memory_usage: "2GB"
+  streaming_mode: false
+  
+  # Error handling - web content can be messy
+  continue_on_error: true
+  max_errors: 20
+  error_log_file: "logs/web_content_errors.log"
+
+# Ingestion configuration for web content
+ingest:
+  # Focus on HTML and text files
+  file_types: ["html", "htm", "txt", "md"]
+  
+  # Web content is typically smaller
+  max_file_size: "10MB"
+  min_file_size: "1KB"
+  
+  # Web scraping settings
+  web:
+    # Content extraction
+    extract_main_content: true
+    remove_navigation: true
+    remove_ads: true
+    remove_comments: true
+    remove_sidebars: true
+    
+    # Link handling
+    extract_links: true
+    follow_links: false
+    max_link_depth: 1
+    
+    # Rate limiting for respectful scraping
+    requests_per_minute: 30
+    delay_between_requests: 2
+    
+    # Headers and user agent
+    user_agent: "QuData/1.0 (+https://github.com/qubasehq/qudata)"
+    headers:
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+      Accept-Language: "en-US,en;q=0.5"
+    
+    # Timeout settings
+    request_timeout: 30
+    max_redirects: 5
+    
+    # Content filtering
+    min_content_length: 200
+    max_content_length: 50000
+  
+  # HTML processing
+  html:
+    extract_text: true
+    preserve_structure: false
+    extract_metadata: true
+    extract_images: false
+    
+    # Readability extraction
+    use_readability: true
+    readability_threshold: 0.6
+
+# Text cleaning optimized for web content
+clean:
+  # Text normalization
+  normalization:
+    unicode_form: "NFKC"
+    fix_encoding: true
+    normalize_whitespace: true
+    remove_control_chars: true
+  
+  # OCR correction (minimal for web content)
+  ocr_correction:
+    enabled: false
+  
+  # Deduplication - important for web content
+  deduplication:
+    enabled: true
+    similarity_threshold: 0.8  # Lower threshold due to similar web content
+    algorithm: "minhash"  # Faster for large volumes
+    parallel_processing: true
+    
+    # MinHash settings for efficiency
+    minhash:
+      num_perm: 128
+      threshold: 0.8
+  
+  # Boilerplate removal - critical for web content
+  boilerplate:
+    enabled: true
+    remove_headers: true
+    remove_footers: true
+    remove_navigation: true
+    remove_sidebars: true
+    
+    # Web-specific patterns
+    custom_patterns:
+      - "Share this article"
+      - "Subscribe to our newsletter"
+      - "Related articles?"
+      - "You might also like"
+      - "Read more"
+      - "Continue reading"
+      - "Comments? \\(\\d+\\)"
+      - "Posted by.*"
+      - "Published on.*"
+      - "Last updated.*"
+      - "Tags?:"
+      - "Categories?:"
+      - "Filed under"
+      - "Social media"
+      - "Follow us"
+      - "Like us on Facebook"
+      - "Tweet this"
+      - "Pin it"
+      - "Advertisement"
+      - "Sponsored content"
+      - "Cookie policy"
+      - "Privacy policy"
+      - "Terms of service"
+    
+    # Content thresholds
+    min_content_ratio: 0.3
+  
+  # HTML cleaning - essential for web content
+  html:
+    remove_tags: true
+    remove_emojis: false  # Keep emojis in web content
+    preserve_links: false
+    preserve_tables: false
+    
+    # Specific HTML elements to remove
+    remove_elements:
+      - "script"
+      - "style"
+      - "nav"
+      - "aside"
+      - "footer"
+      - "header"
+      - "advertisement"
+      - "ad"
+    
+    # Clean up web-specific formatting
+    clean_urls: true
+    remove_tracking_params: true
+  
+  # Language detection
+  language:
+    detect_language: true
+    confidence_threshold: 0.7  # Lower threshold for web content
+    target_languages: ["en", "es", "fr", "de", "it"]  # Common web languages
+    fallback_language: "en"
+    handle_code_switching: true
+
+# Annotation configuration for web content
+annotate:
+  # Taxonomy classification for web content
+  taxonomy:
+    enabled: true
+    method: "hybrid"
+    confidence_threshold: 0.6  # Lower threshold for diverse web content
+    max_categories: 5
+    fallback_category: "general"
+    
+    # Web content categories
+    custom_rules:
+      news:
+        keywords: ["breaking", "news", "report", "journalist", "press"]
+        patterns: ["\\b(breaking|urgent|developing)\\b"]
+      
+      technology:
+        keywords: ["tech", "software", "app", "digital", "innovation"]
+        patterns: ["\\b(AI|ML|IoT|blockchain|cryptocurrency)\\b"]
+      
+      business:
+        keywords: ["business", "finance", "market", "economy", "startup"]
+        patterns: ["\\b(CEO|IPO|revenue|profit)\\b"]
+      
+      lifestyle:
+        keywords: ["lifestyle", "health", "fitness", "food", "travel"]
+        patterns: ["\\b(recipe|workout|destination)\\b"]
+      
+      entertainment:
+        keywords: ["movie", "music", "celebrity", "entertainment", "review"]
+        patterns: ["\\b(film|album|concert|premiere)\\b"]
+      
+      sports:
+        keywords: ["sports", "game", "team", "player", "championship"]
+        patterns: ["\\b(NFL|NBA|FIFA|Olympics)\\b"]
+      
+      politics:
+        keywords: ["politics", "government", "election", "policy", "law"]
+        patterns: ["\\b(president|congress|senate|vote)\\b"]
+  
+  # Metadata extraction for web content
+  metadata:
+    extract_authors: true
+    extract_dates: true
+    extract_sources: true
+    
+    # Web-specific patterns
+    author_patterns:
+      - "By\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)*)"
+      - "Author[:\\s]+([^\\n]+)"
+      - "Written by\\s+([^\\n]+)"
+      - "Posted by\\s+([^\\n]+)"
+    
+    date_patterns:
+      - "Published[:\\s]+([^\\n]+)"
+      - "Posted on[:\\s]+([^\\n]+)"
+      - "Last updated[:\\s]+([^\\n]+)"
+      - "\\b(\\d{1,2}[/-]\\d{1,2}[/-]\\d{4})\\b"
+      - "\\b(\\w+ \\d{1,2}, \\d{4})\\b"
+    
+    # Custom extractors for web metadata
+    custom_extractors:
+      url: "https?://[^\\s]+"
+      domain: "https?://([^/]+)"
+      title: "<title>([^<]+)</title>"
+      description: "<meta name=\"description\" content=\"([^\"]+)\""
+      keywords: "<meta name=\"keywords\" content=\"([^\"]+)\""
+      og_title: "<meta property=\"og:title\" content=\"([^\"]+)\""
+      og_description: "<meta property=\"og:description\" content=\"([^\"]+)\""
+      twitter_title: "<meta name=\"twitter:title\" content=\"([^\"]+)\""
+  
+  # Named Entity Recognition for web content
+  ner:
+    enabled: true
+    model: "en_core_web_sm"
+    confidence_threshold: 0.7  # Lower threshold for web content
+    
+    entity_types:
+      - "PERSON"
+      - "ORG"
+      - "GPE"
+      - "DATE"
+      - "MONEY"
+      - "PRODUCT"
+    
+    # Web-specific entities
+    custom_entities:
+      WEBSITE: ["Facebook", "Twitter", "Instagram", "YouTube", "LinkedIn"]
+      BRAND: ["Apple", "Google", "Microsoft", "Amazon", "Netflix"]
+      SOCIAL_MEDIA: ["@\\w+", "#\\w+"]  # Mentions and hashtags
+
+# Quality control for web content
+quality:
+  enabled: true
+  min_score: 0.5  # Lower threshold for diverse web content
+  auto_filter: true
+  
+  # Quality dimensions
+  dimensions:
+    content: 0.4
+    language: 0.3
+    structure: 0.2
+    readability: 0.1
+  
+  # Content quality for web articles
+  content_quality:
+    min_length: 200    # Shorter minimum for web content
+    max_length: 10000  # Reasonable maximum for articles
+    check_informativeness: true
+    check_coherence: false  # Web content can be less formal
+    
+    # Web-specific quality checks
+    check_clickbait: true
+    check_spam_indicators: true
+    max_caps_ratio: 0.1
+    max_exclamation_ratio: 0.05
+  
+  # Language quality
+  language_quality:
+    check_grammar: false  # Web content can be informal
+    check_spelling: true
+    check_readability: true
+    min_language_confidence: 0.7
+    
+    # Allow informal language
+    allow_contractions: true
+    allow_slang: true
+  
+  # Structure quality
+  structure_quality:
+    check_paragraphs: true
+    min_paragraph_length: 50
+    max_paragraph_length: 500
+    check_sentence_variety: false
+
+# Export configuration for web content
+export:
+  # Multiple formats
+  formats: ["jsonl", "csv"]
+  
+  # Include web-specific metadata
+  include_metadata: true
+  include_quality_scores: true
+  
+  # Web-specific fields
+  custom_fields:
+    - "url"
+    - "domain"
+    - "title"
+    - "description"
+    - "publish_date"
+    - "author"
+    - "category"
+    - "readability_score"
+  
+  # Data splitting
+  splitting:
+    enabled: true
+    train_ratio: 0.8
+    validation_ratio: 0.1
+    test_ratio: 0.1
+    stratify_by: "category"
+    random_seed: 42
+  
+  # Format settings
+  jsonl:
+    pretty_print: false
+    ensure_ascii: false
+  
+  csv:
+    delimiter: ","
+    quote_char: '"'
+    include_headers: true
+
+# Logging configuration
+logging:
+  level: "INFO"
+  file: "logs/web_content.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Web-specific logging
+  log_scraping_stats: true
+  log_blocked_requests: true
+  log_quality_filtering: true
+
+# Performance settings for web content
+performance:
+  # Web content is typically faster to process
+  timeout_per_document: 60  # 1 minute per article
+  max_retries: 2
+  
+  # Memory management
+  gc_frequency: 100
+  
+  # Caching
+  enable_caching: true
+  cache_directory: ".cache/web"
+  cache_ttl: 3600  # 1 hour for web content

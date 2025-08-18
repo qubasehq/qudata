@@ -1,0 +1,41 @@
+# QuData Pipeline Configuration
+pipeline:
+  name: "qudata"
+  version: "1.0.0"
+  
+  # Input/Output paths
+  paths:
+    raw_data: "data/raw"
+    staging: "data/staging"
+    processed: "data/processed"
+    exports: "data/exports"
+    
+  # Processing stages
+  stages:
+    ingest:
+      enabled: true
+      file_types: ["txt", "md", "html", "pdf", "docx", "epub"]
+      max_file_size: "100MB"
+      
+    clean:
+      enabled: true
+      normalize_unicode: true
+      remove_boilerplate: true
+      deduplicate: true
+      
+    annotate:
+      enabled: true
+      taxonomy: true
+      ner: true
+      
+    score:
+      enabled: true
+      min_quality_score: 0.7
+      
+    pack:
+      enabled: true
+      formats: ["jsonl", "chatml", "plain"]
+      
+    export:
+      enabled: true
+      llmbuilder_path: "../llmbuilder/data/cleaned"

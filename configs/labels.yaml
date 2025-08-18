@@ -1,0 +1,37 @@
+# Label schema for supervised tasks
+instruction_following:
+  labels:
+    - "instruction"
+    - "context" 
+    - "response"
+    
+  formats:
+    alpaca:
+      instruction_key: "instruction"
+      input_key: "input"
+      output_key: "output"
+      
+    chatml:
+      system_role: "system"
+      user_role: "user"
+      assistant_role: "assistant"
+
+classification:
+  quality:
+    - "high"
+    - "medium" 
+    - "low"
+    
+  domain:
+    - "technology"
+    - "science"
+    - "business"
+    - "education"
+    - "general"
+    
+  content_type:
+    - "documentation"
+    - "tutorial"
+    - "reference"
+    - "discussion"
+    - "news"

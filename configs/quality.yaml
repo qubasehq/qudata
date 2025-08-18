@@ -1,0 +1,21 @@
+# Quality scoring weights and thresholds
+scoring:
+  weights:
+    length: 0.2          # Document length score
+    language: 0.2        # Language confidence
+    coherence: 0.3       # Text coherence
+    uniqueness: 0.2      # Duplicate detection
+    readability: 0.1     # Reading level
+    
+  thresholds:
+    min_length: 100      # Minimum character count
+    max_length: 100000   # Maximum character count
+    min_language_conf: 0.8  # Language detection confidence
+    min_coherence: 0.6   # Text coherence score
+    max_duplicate_sim: 0.9  # Duplicate similarity threshold
+    
+  filters:
+    remove_low_quality: true
+    remove_duplicates: true
+    remove_short_docs: true
+    remove_non_text: true

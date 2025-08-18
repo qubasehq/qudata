@@ -1,0 +1,470 @@
+# Docker Compose for QuData Production Environment
+version: '3.8'
+
+services:
+  # Main QuData API service
+  qudata-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+      args:
+        BUILD_DATE: ${BUILD_DATE:-}
+        VERSION: ${VERSION:-1.0.1}
+        VCS_REF: ${VCS_REF:-}
+    image: qudata:${VERSION:-1.0.1}
+    container_name: qudata-api
+    command: ["api"]
+    ports:
+      - "8000:8000"
+    volumes:
+      # Data directories (read-write)
+      - qudata_data:/app/data
+      - qudata_logs:/app/logs
+      - qudata_tmp:/app/tmp
+      # Configuration (read-only)
+      - ./configs:/app/configs:ro
+      # Backup directory
+      - ./backups:/app/backups
+    environment:
+      # Application settings
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      
+      # Database connection
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=qudata
+      - DB_USER=qudata
+      - DB_PASSWORD_FILE=/run/secrets/db_password
+      
+      # Redis connection
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
+      
+      # Performance settings
+      - WORKERS=4
+      - MAX_WORKERS=8
+      - BATCH_SIZE=200
+      - MAX_MEMORY=8GB
+      
+      # API settings
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - ENABLE_CORS=false
+      - ENABLE_DOCS=false
+      
+      # Security settings
+      - SECRET_KEY_FILE=/run/secrets/secret_key
+      - ALLOWED_HOSTS=your-domain.com,api.your-domain.com
+      
+      # Feature flags
+      - ENABLE_GRAPHQL=true
+      - ENABLE_WEBHOOKS=true
+      - ENABLE_MONITORING=true
+      - ENABLE_DASHBOARD=false
+    secrets:
+      - db_password
+      - redis_password
+      - secret_key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qudata-backend
+      - qudata-frontend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+  # QuData worker service for background processing
+  qudata-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+      args:
+        BUILD_DATE: ${BUILD_DATE:-}
+        VERSION: ${VERSION:-1.0.1}
+        VCS_REF: ${VCS_REF:-}
+    image: qudata:${VERSION:-1.0.1}
+    container_name: qudata-worker
+    command: ["worker"]
+    volumes:
+      # Data directories (read-write)
+      - qudata_data:/app/data
+      - qudata_logs:/app/logs
+      - qudata_tmp:/app/tmp
+      # Configuration (read-only)
+      - ./configs:/app/configs:ro
+    environment:
+      # Application settings
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      - WORKER_TYPE=processing
+      
+      # Database connection
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=qudata
+      - DB_USER=qudata
+      - DB_PASSWORD_FILE=/run/secrets/db_password
+      
+      # Redis connection
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_PASSWORD_FILE=/run/secrets/redis_password
+      
+      # Worker settings
+      - CELERY_CONCURRENCY=4
+      - CELERY_MAX_TASKS_PER_CHILD=1000
+      - CELERY_PREFETCH_MULTIPLIER=1
+      
+      # Performance settings
+      - MAX_WORKERS=8
+      - BATCH_SIZE=200
+      - MAX_MEMORY=8GB
+    secrets:
+      - db_password
+      - redis_password
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qudata-backend
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+
+  # PostgreSQL database with optimized settings
+  postgres:
+    image: postgres:15-alpine
+    container_name: qudata-postgres
+    environment:
+      - POSTGRES_DB=qudata
+      - POSTGRES_USER=qudata
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - ./docker/postgres-prod.conf:/etc/postgresql/postgresql.conf:ro
+      - ./backups/postgres:/backups
+    secrets:
+      - db_password
+    restart: unless-stopped
+    networks:
+      - qudata-backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qudata -d qudata"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: >
+      postgres
+      -c config_file=/etc/postgresql/postgresql.conf
+      -c log_statement=mod
+      -c log_destination=stderr
+      -c logging_collector=on
+      -c log_directory=/var/log/postgresql
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  # Redis with persistence and security
+  redis:
+    image: redis:7-alpine
+    container_name: qudata-redis
+    command: >
+      redis-server
+      --requirepass $(cat /run/secrets/redis_password)
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    volumes:
+      - redis_data:/data
+      - ./docker/redis-prod.conf:/usr/local/etc/redis/redis.conf:ro
+    secrets:
+      - redis_password
+    restart: unless-stopped
+    networks:
+      - qudata-backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "$(cat /run/secrets/redis_password)", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  # Nginx load balancer and reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: qudata-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx/nginx-prod.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+      - ./docker/nginx/html:/usr/share/nginx/html:ro
+    depends_on:
+      - qudata-api
+    restart: unless-stopped
+    networks:
+      - qudata-frontend
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  # Elasticsearch for centralized logging
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: qudata-elasticsearch
+    environment:
+      - node.name=qudata-es-node
+      - cluster.name=qudata-cluster
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.monitoring.collection.enabled=true
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      - ./docker/elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+    restart: unless-stopped
+    networks:
+      - qudata-backend
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # Logstash for log processing
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: qudata-logstash
+    volumes:
+      - ./docker/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./docker/logstash/config:/usr/share/logstash/config:ro
+      - qudata_logs:/logs:ro
+    environment:
+      - "LS_JAVA_OPTS=-Xmx512m -Xms512m"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - qudata-backend
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: qudata-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    volumes:
+      - ./docker/prometheus/prometheus-prod.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    restart: unless-stopped
+    networks:
+      - qudata-backend
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: qudata-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD_FILE=/run/secrets/grafana_password
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./docker/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+    secrets:
+      - grafana_password
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - qudata-backend
+      - qudata-frontend
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+# Secrets management
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
+  secret_key:
+    file: ./secrets/secret_key.txt
+  grafana_password:
+    file: ./secrets/grafana_password.txt
+
+# Named volumes for data persistence
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/qudata/data/postgres
+  redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/qudata/data/redis
+  elasticsearch_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/qudata/data/elasticsearch
+  prometheus_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/qudata/data/prometheus
+  grafana_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/qudata/data/grafana
+  qudata_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/qudata/data/app
+  qudata_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/qudata/logs
+  qudata_tmp:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /opt/qudata/tmp
+
+# Networks for security isolation
+networks:
+  qudata-frontend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/24
+  qudata-backend:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.22.0.0/24

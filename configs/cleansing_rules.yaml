@@ -1,0 +1,490 @@
+# Comprehensive Text Cleaning and Sanitization Rules
+# This configuration file defines patterns and rules for cleaning various types of content
+
+# Personal Identifiable Information (PII) Detection Patterns
+pii_patterns:
+  # Email addresses
+  email: "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b"
+  
+  # Phone numbers (various formats)
+  phone_us: "\\b\\d{3}[-.]?\\d{3}[-.]?\\d{4}\\b"
+  phone_international: "\\+\\d{1,3}[\\s.-]?\\d{1,4}[\\s.-]?\\d{1,4}[\\s.-]?\\d{1,9}"
+  
+  # Social Security Numbers
+  ssn: "\\b\\d{3}-\\d{2}-\\d{4}\\b"
+  
+  # Credit card numbers
+  credit_card: "\\b\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}\\b"
+  
+  # IP addresses
+  ip_address: "\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b"
+  
+  # URLs (for potential privacy concerns)
+  url: "https?://[\\w\\.-]+(?:/[\\w\\.-]*)*/?(?:\\?[\\w&=%.-]*)?(?:#[\\w.-]*)?"
+  
+  # Addresses (basic pattern)
+  address: "\\d+\\s+[A-Za-z0-9\\s,.-]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Place|Pl)\\b"
+
+# Boilerplate Content Patterns
+boilerplate_patterns:
+  # Navigation elements
+  navigation:
+    - "nav"
+    - "navigation"
+    - "menu"
+    - "sidebar"
+    - "breadcrumb"
+    - "breadcrumbs"
+    - "site map"
+    - "sitemap"
+    - "main menu"
+    - "primary navigation"
+    - "secondary navigation"
+    - "top menu"
+    - "bottom menu"
+    - "left menu"
+    - "right menu"
+  
+  # Header and footer elements
+  headers_footers:
+    - "header"
+    - "footer"
+    - "page header"
+    - "page footer"
+    - "site header"
+    - "site footer"
+    - "masthead"
+    - "banner"
+    - "top banner"
+    - "header banner"
+  
+  # Advertisement content
+  ads:
+    - "advertisement"
+    - "sponsored"
+    - "ad-container"
+    - "ad container"
+    - "banner ad"
+    - "display ad"
+    - "text ad"
+    - "promotional"
+    - "promotion"
+    - "promo"
+    - "affiliate"
+    - "affiliate link"
+    - "sponsored content"
+    - "paid promotion"
+    - "commercial"
+    - "marketing"
+    - "buy now"
+    - "shop now"
+    - "order now"
+    - "limited time offer"
+    - "special offer"
+    - "discount"
+    - "sale"
+    - "deal of the day"
+  
+  # Cookie and privacy notices
+  cookies:
+    - "cookie"
+    - "cookies"
+    - "privacy policy"
+    - "privacy notice"
+    - "terms of service"
+    - "terms and conditions"
+    - "user agreement"
+    - "gdpr"
+    - "data protection"
+    - "consent"
+    - "accept cookies"
+    - "cookie consent"
+    - "cookie policy"
+    - "we use cookies"
+    - "this site uses cookies"
+    - "by continuing to use"
+    - "by using this site"
+  
+  # Social media elements
+  social:
+    - "share"
+    - "like"
+    - "follow"
+    - "subscribe"
+    - "tweet"
+    - "retweet"
+    - "facebook"
+    - "twitter"
+    - "linkedin"
+    - "instagram"
+    - "youtube"
+    - "pinterest"
+    - "reddit"
+    - "social media"
+    - "follow us"
+    - "like us"
+    - "share this"
+    - "social sharing"
+    - "social buttons"
+    - "connect with us"
+    - "find us on"
+  
+  # Legal and copyright text
+  legal:
+    - "copyright"
+    - "all rights reserved"
+    - "©"
+    - "trademark"
+    - "®"
+    - "™"
+    - "legal notice"
+    - "disclaimer"
+    - "terms and conditions"
+    - "liability"
+    - "warranty"
+    - "intellectual property"
+    - "proprietary"
+    - "confidential"
+  
+  # Comments and user-generated content markers
+  comments:
+    - "comments"
+    - "leave a comment"
+    - "post a comment"
+    - "comment section"
+    - "user comments"
+    - "discussion"
+    - "replies"
+    - "reply"
+    - "respond"
+    - "feedback"
+    - "your thoughts"
+    - "what do you think"
+  
+  # Pagination and navigation aids
+  pagination:
+    - "next page"
+    - "previous page"
+    - "page"
+    - "of"
+    - "first"
+    - "last"
+    - "more"
+    - "load more"
+    - "show more"
+    - "view all"
+    - "see all"
+    - "continue reading"
+    - "read more"
+  
+  # Search and filter elements
+  search:
+    - "search"
+    - "filter"
+    - "sort by"
+    - "search results"
+    - "no results"
+    - "did you mean"
+    - "suggestions"
+    - "related searches"
+    - "popular searches"
+  
+  # Form elements and calls to action
+  forms:
+    - "submit"
+    - "send"
+    - "contact us"
+    - "get in touch"
+    - "email us"
+    - "call us"
+    - "sign up"
+    - "register"
+    - "login"
+    - "log in"
+    - "sign in"
+    - "create account"
+    - "join now"
+    - "subscribe now"
+    - "newsletter"
+    - "mailing list"
+
+# Content Quality Patterns
+# Patterns that indicate low-quality or unwanted content
+deny_patterns:
+  # Spam indicators
+  spam:
+    - "\\b(spam|scam|phishing)\\b"
+    - "\\b(click here|click now)\\b"
+    - "\\b(free money|easy money|make money fast)\\b"
+    - "\\b(guaranteed|100% guaranteed)\\b"
+    - "\\b(limited time|act now|hurry)\\b"
+    - "\\b(no obligation|risk free)\\b"
+    - "\\b(winner|congratulations|you've won)\\b"
+  
+  # Adult content
+  adult:
+    - "\\b(adult|nsfw|explicit|mature content)\\b"
+    - "\\b(18\\+|adults only|mature audiences)\\b"
+  
+  # Low-quality content indicators
+  low_quality:
+    - "\\b(lorem ipsum|placeholder|dummy text)\\b"
+    - "\\b(test|testing|sample|example only)\\b"
+    - "^\\s*[\\*\\-=]{3,}\\s*$"  # Lines of repeated characters
+    - "^\\s*\\d+\\s*$"  # Lines with only numbers
+    - "^\\s*[^\\w\\s]{3,}\\s*$"  # Lines with only symbols
+  
+  # Copyright and legal boilerplate
+  copyright:
+    - "\\b(copyright|all rights reserved)\\b"
+    - "\\b(proprietary and confidential)\\b"
+    - "\\b(unauthorized reproduction|distribution prohibited)\\b"
+  
+  # Technical artifacts
+  technical:
+    - "\\b(javascript|css|html|xml)\\b"
+    - "\\b(error|404|not found|page not found)\\b"
+    - "\\b(loading|please wait|redirecting)\\b"
+    - "\\b(enable javascript|browser not supported)\\b"
+
+# Content that should be preserved (high-quality indicators)
+allow_patterns:
+  # Educational content
+  educational:
+    - "\\b(example|tutorial|guide|how-to|walkthrough)\\b"
+    - "\\b(documentation|reference|manual|handbook)\\b"
+    - "\\b(learn|learning|education|course|lesson)\\b"
+    - "\\b(explanation|definition|overview|introduction)\\b"
+    - "\\b(step by step|instructions|procedure)\\b"
+  
+  # Technical content
+  technical:
+    - "\\b(api|sdk|framework|library|tool)\\b"
+    - "\\b(code|programming|development|software)\\b"
+    - "\\b(algorithm|method|function|class)\\b"
+    - "\\b(implementation|solution|approach)\\b"
+  
+  # Research and analysis
+  research:
+    - "\\b(research|study|analysis|report|findings)\\b"
+    - "\\b(data|statistics|metrics|results)\\b"
+    - "\\b(conclusion|summary|abstract|methodology)\\b"
+    - "\\b(experiment|hypothesis|theory|model)\\b"
+  
+  # News and articles
+  news:
+    - "\\b(article|news|report|story|interview)\\b"
+    - "\\b(opinion|editorial|commentary|review)\\b"
+    - "\\b(announcement|update|release|launch)\\b"
+
+# Text Normalization Settings
+normalization:
+  # Unicode normalization
+  unicode: true
+  unicode_form: "NFKC"
+  
+  # Whitespace handling
+  whitespace: true
+  preserve_line_breaks: true
+  max_consecutive_newlines: 2
+  
+  # Quote normalization
+  quotes: true
+  normalize_smart_quotes: true
+  
+  # Punctuation handling
+  punctuation: false
+  normalize_dashes: true
+  normalize_ellipsis: true
+  
+  # Case handling
+  preserve_case: true
+  
+  # Special character handling
+  remove_control_chars: true
+  preserve_emojis: false
+
+# OCR Error Correction Settings
+ocr_correction:
+  enabled: true
+  
+  # Character substitution corrections
+  character_substitutions: true
+  
+  # Spacing corrections
+  spacing_corrections: true
+  fix_punctuation_spacing: true
+  
+  # Line break corrections
+  line_break_corrections: true
+  rejoin_broken_words: true
+  
+  # Word splitting corrections
+  word_splitting_corrections: true
+  
+  # Common OCR word corrections
+  word_corrections:
+    "tlie": "the"
+    "tiie": "the"
+    "tne": "the"
+    "tha": "the"
+    "arid": "and"
+    "ancl": "and"
+    "anci": "and"
+    "witli": "with"
+    "widi": "with"
+    "witii": "with"
+    "tliat": "that"
+    "tiiat": "that"
+    "tnat": "that"
+    "tliis": "this"
+    "tiiis": "this"
+    "tnis": "this"
+    "wliich": "which"
+    "wiiich": "which"
+    "wnich": "which"
+    "wlien": "when"
+    "wiien": "when"
+    "wnen": "when"
+    "wliere": "where"
+    "wiiere": "where"
+    "wnere": "where"
+    "tliey": "they"
+    "tiiey": "they"
+    "tney": "they"
+    "tliere": "there"
+    "tiiere": "there"
+    "tnere": "there"
+    "tlirough": "through"
+    "tiirough": "through"
+    "tnrough": "through"
+
+# Deduplication Settings
+deduplication:
+  enabled: true
+  
+  # Similarity thresholds
+  exact_match_threshold: 1.0
+  near_duplicate_threshold: 0.85
+  fuzzy_match_threshold: 0.7
+  
+  # Content preprocessing
+  normalize_whitespace: true
+  case_sensitive: false
+  ignore_punctuation: true
+  min_content_length: 50
+  
+  # Performance settings
+  use_hashing: true
+  chunk_size: 1000
+
+# Boilerplate Removal Settings
+boilerplate_removal:
+  enabled: true
+  
+  # Removal toggles
+  remove_navigation: true
+  remove_ads: true
+  remove_cookies: true
+  remove_social: true
+  remove_legal: true
+  remove_headers_footers: true
+  remove_comments: true
+  remove_pagination: true
+  remove_search: true
+  remove_forms: false  # Keep forms as they might contain valuable content
+  
+  # Removal behavior
+  aggressive_removal: false
+  preserve_structure: true
+  min_content_length: 30
+  
+  # Custom patterns (regex-based)
+  custom_patterns:
+    - name: "separator_lines"
+      pattern: "^\\s*[-=*_]{3,}\\s*$"
+      pattern_type: "regex"
+    
+    - name: "page_numbers"
+      pattern: "^\\s*Page\\s+\\d+\\s*$"
+      pattern_type: "regex"
+      case_sensitive: false
+    
+    - name: "timestamps"
+      pattern: "^\\s*\\d{1,2}[:/]\\d{1,2}[:/]\\d{2,4}\\s*$"
+      pattern_type: "regex"
+    
+    - name: "email_signatures"
+      pattern: "^\\s*--\\s*$"
+      pattern_type: "regex"
+    
+    - name: "web_artifacts"
+      pattern: "\\b(click to expand|show/hide|toggle|dropdown)\\b"
+      pattern_type: "regex"
+      case_sensitive: false
+
+# Language Detection Settings
+language_detection:
+  enabled: true
+  confidence_threshold: 0.8
+  
+  # Supported languages (ISO 639-1 codes)
+  supported_languages:
+    - "en"  # English
+    - "es"  # Spanish
+    - "fr"  # French
+    - "de"  # German
+    - "it"  # Italian
+    - "pt"  # Portuguese
+    - "ru"  # Russian
+    - "zh"  # Chinese
+    - "ja"  # Japanese
+    - "ko"  # Korean
+    - "ar"  # Arabic
+    - "hi"  # Hindi
+  
+  # Language-specific processing
+  language_specific:
+    en:
+      remove_stopwords: false
+      custom_boilerplate:
+        - "click here"
+        - "read more"
+        - "learn more"
+    
+    es:
+      remove_stopwords: false
+      custom_boilerplate:
+        - "haga clic aquí"
+        - "leer más"
+        - "más información"
+    
+    fr:
+      remove_stopwords: false
+      custom_boilerplate:
+        - "cliquez ici"
+        - "lire la suite"
+        - "en savoir plus"
+
+# Content Quality Scoring
+quality_scoring:
+  enabled: true
+  
+  # Scoring weights
+  weights:
+    length_score: 0.2
+    language_confidence: 0.2
+    boilerplate_ratio: 0.3
+    duplicate_penalty: 0.2
+    pii_penalty: 0.1
+  
+  # Quality thresholds
+  thresholds:
+    min_quality_score: 0.5
+    min_length: 100
+    max_boilerplate_ratio: 0.4
+    min_language_confidence: 0.7
+  
+  # Scoring parameters
+  optimal_length: 1000
+  length_penalty_threshold: 50

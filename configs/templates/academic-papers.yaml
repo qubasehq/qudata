@@ -1,0 +1,302 @@
+# Academic Papers Processing Template
+# Optimized for processing research papers, theses, and academic documents
+
+pipeline:
+  name: "academic_papers"
+  version: "1.0.0"
+  description: "Processing academic papers for research LLM training"
+  
+  # Processing settings optimized for academic content
+  parallel_processing: true
+  max_workers: 4
+  batch_size: 50  # Smaller batches for large academic documents
+  
+  # Memory management for large documents
+  max_memory_usage: "4GB"
+  streaming_mode: false
+  
+  # Error handling
+  continue_on_error: true
+  max_errors: 5
+  error_log_file: "logs/academic_papers_errors.log"
+
+# Ingestion configuration for academic documents
+ingest:
+  # Focus on PDF documents primarily
+  file_types: ["pdf", "tex", "docx"]
+  
+  # Academic papers can be large
+  max_file_size: "50MB"
+  min_file_size: "100KB"
+  
+  # PDF-specific settings for academic papers
+  pdf:
+    extract_text: true
+    preserve_layout: true
+    extract_tables: true
+    extract_images: false  # Usually not needed for text training
+    extract_citations: true
+    extract_references: true
+    
+    # Academic PDFs often have complex layouts
+    table_detection_method: "lattice"
+    
+    # OCR fallback for scanned papers
+    ocr_fallback: true
+    ocr_confidence_threshold: 0.7
+    ocr_language: "eng"
+  
+  # Document processing for Word documents
+  document:
+    extract_text: true
+    extract_tables: true
+    preserve_formatting: false
+    extract_properties: true
+    extract_comments: false
+    extract_revisions: false
+
+# Text cleaning optimized for academic content
+clean:
+  # Text normalization
+  normalization:
+    unicode_form: "NFKC"
+    fix_encoding: true
+    normalize_whitespace: true
+    remove_control_chars: true
+  
+  # OCR correction for scanned papers
+  ocr_correction:
+    enabled: true
+    confidence_threshold: 0.8
+    fix_common_errors: true
+    custom_corrections:
+      # Common academic OCR errors
+      "artific1al": "artificial"
+      "intellig3nce": "intelligence"
+      "alg0rithm": "algorithm"
+      "c0mputer": "computer"
+  
+  # Deduplication with higher threshold for academic content
+  deduplication:
+    enabled: true
+    similarity_threshold: 0.9  # Higher threshold to avoid removing similar but valid content
+    algorithm: "jaccard"
+    parallel_processing: true
+  
+  # Boilerplate removal for academic papers
+  boilerplate:
+    enabled: true
+    remove_headers: true
+    remove_footers: true
+    
+    # Academic-specific patterns
+    custom_patterns:
+      - "References\\s*$"
+      - "Bibliography\\s*$"
+      - "Acknowledgments?\\s*$"
+      - "Appendix\\s+[A-Z]\\s*$"
+      - "Figure\\s+\\d+[:\\.].*$"
+      - "Table\\s+\\d+[:\\.].*$"
+      - "\\d+\\s+of\\s+\\d+"  # Page numbers
+      - "Proceedings of.*"
+      - "Conference on.*"
+      - "©\\s*\\d{4}.*"  # Copyright notices
+    
+    # Content thresholds
+    min_content_ratio: 0.4
+  
+  # HTML cleaning (for web-scraped papers)
+  html:
+    remove_tags: true
+    remove_emojis: true
+    preserve_links: false
+    preserve_tables: true
+  
+  # Language detection
+  language:
+    detect_language: true
+    confidence_threshold: 0.8
+    target_languages: ["en"]  # Focus on English papers
+    fallback_language: "en"
+
+# Annotation configuration for academic content
+annotate:
+  # Taxonomy classification for academic domains
+  taxonomy:
+    enabled: true
+    method: "hybrid"
+    confidence_threshold: 0.7
+    max_categories: 3
+    fallback_category: "general_research"
+    
+    # Academic domain classification
+    custom_rules:
+      computer_science:
+        keywords: ["algorithm", "machine learning", "artificial intelligence", "computer vision", "NLP"]
+        patterns: ["\\b(AI|ML|CNN|RNN|LSTM|GAN)\\b"]
+      
+      mathematics:
+        keywords: ["theorem", "proof", "equation", "mathematical", "statistics"]
+        patterns: ["\\b(theorem|lemma|corollary)\\b"]
+      
+      physics:
+        keywords: ["quantum", "particle", "energy", "physics", "mechanics"]
+        patterns: ["\\b(quantum|photon|electron)\\b"]
+      
+      biology:
+        keywords: ["gene", "protein", "cell", "organism", "evolution"]
+        patterns: ["\\b(DNA|RNA|genome)\\b"]
+      
+      chemistry:
+        keywords: ["molecule", "chemical", "reaction", "compound", "synthesis"]
+        patterns: ["\\b(H2O|CO2|chemical)\\b"]
+  
+  # Metadata extraction for academic papers
+  metadata:
+    extract_authors: true
+    extract_dates: true
+    extract_sources: true
+    
+    # Academic-specific patterns
+    author_patterns:
+      - "Authors?:\\s*([^\\n]+)"
+      - "By\\s+([A-Z][a-z]+(?:\\s+[A-Z][a-z]+)+(?:,\\s*[A-Z][a-z]+(?:\\s+[A-Z][a-z]+)+)*)"
+      - "([A-Z][a-z]+(?:\\s+[A-Z]\\.?)+\\s+[A-Z][a-z]+)"  # First M. Last format
+    
+    # Custom extractors for academic metadata
+    custom_extractors:
+      doi: "DOI[:\\s]*([^\\s]+)"
+      isbn: "ISBN[:\\s]*([0-9-X]+)"
+      arxiv: "arXiv[:\\s]*([0-9]+\\.[0-9]+)"
+      abstract: "Abstract[:\\s]*([^\\n]+(?:\\n[^\\n]+)*?)(?=\\n\\s*\\n|Keywords|Introduction|1\\.|I\\.)"
+      keywords: "Keywords?[:\\s]*([^\\n]+)"
+      conference: "(?:Proceedings of|Conference on|Workshop on)\\s+([^\\n]+)"
+      journal: "(?:Published in|Journal of|In)\\s+([^\\n,]+)"
+  
+  # Named Entity Recognition for academic content
+  ner:
+    enabled: true
+    model: "en_core_web_sm"
+    confidence_threshold: 0.8
+    
+    entity_types:
+      - "PERSON"  # Authors, researchers
+      - "ORG"     # Universities, institutions
+      - "GPE"     # Countries, cities
+      - "DATE"    # Publication dates
+    
+    # Academic-specific entities
+    custom_entities:
+      ALGORITHM: ["SVM", "CNN", "RNN", "LSTM", "GAN", "BERT", "GPT"]
+      METRIC: ["accuracy", "precision", "recall", "F1-score", "BLEU", "ROUGE"]
+      DATASET: ["ImageNet", "MNIST", "CIFAR", "CoNLL", "SQuAD"]
+      CONFERENCE: ["NIPS", "ICML", "ICLR", "ACL", "EMNLP", "CVPR"]
+      JOURNAL: ["Nature", "Science", "Cell", "PNAS"]
+
+# Quality control optimized for academic papers
+quality:
+  enabled: true
+  min_score: 0.7  # Higher threshold for academic content
+  auto_filter: true
+  
+  # Quality dimensions with academic focus
+  dimensions:
+    content: 0.5      # High weight on content quality
+    language: 0.3     # Academic language quality
+    structure: 0.2    # Paper structure
+  
+  # Content quality for academic papers
+  content_quality:
+    min_length: 1000   # Academic papers should be substantial
+    max_length: 50000  # Very long papers might be books
+    check_informativeness: true
+    check_coherence: true
+    check_academic_format: true
+    
+    # Academic-specific quality checks
+    require_abstract: true
+    require_references: true
+    min_references: 5
+    check_citation_format: true
+  
+  # Language quality for academic writing
+  language_quality:
+    check_grammar: true
+    check_spelling: true
+    check_academic_style: true
+    min_language_confidence: 0.9
+    
+    # Academic writing style checks
+    check_passive_voice: false  # Common in academic writing
+    check_sentence_complexity: true
+    preferred_tense: "present"
+  
+  # Structure quality for papers
+  structure_quality:
+    check_sections: true
+    required_sections: ["abstract", "introduction", "conclusion"]
+    check_heading_hierarchy: true
+    check_figure_captions: true
+    check_table_captions: true
+
+# Export configuration for academic datasets
+export:
+  # Multiple formats for different use cases
+  formats: ["jsonl", "parquet", "csv"]
+  
+  # Include comprehensive metadata
+  include_metadata: true
+  include_quality_scores: true
+  
+  # Academic-specific fields
+  custom_fields:
+    - "doi"
+    - "arxiv_id"
+    - "conference"
+    - "journal"
+    - "abstract"
+    - "keywords"
+    - "citation_count"
+  
+  # Data splitting for training
+  splitting:
+    enabled: true
+    train_ratio: 0.8
+    validation_ratio: 0.1
+    test_ratio: 0.1
+    stratify_by: "domain"  # Ensure balanced academic domains
+    random_seed: 42
+  
+  # Format-specific settings
+  jsonl:
+    pretty_print: false
+    ensure_ascii: false
+  
+  parquet:
+    compression: "snappy"
+    row_group_size: 10000  # Smaller for academic papers
+
+# Logging configuration
+logging:
+  level: "INFO"
+  file: "logs/academic_papers.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Academic-specific logging
+  log_citations: true
+  log_quality_issues: true
+  log_extraction_stats: true
+
+# Performance settings for academic content
+performance:
+  # Academic papers can be large and complex
+  timeout_per_document: 600  # 10 minutes per paper
+  max_retries: 3
+  
+  # Memory management
+  gc_frequency: 50  # Garbage collect every 50 documents
+  
+  # Caching for repeated processing
+  enable_caching: true
+  cache_directory: ".cache/academic"
+  cache_ttl: 86400  # 24 hours

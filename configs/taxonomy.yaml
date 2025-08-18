@@ -1,0 +1,32 @@
+# Domain and category classification rules
+domains:
+  technology:
+    keywords: ["software", "programming", "AI", "machine learning", "computer"]
+    patterns: ["\\b(python|javascript|react|nodejs)\\b"]
+    
+  science:
+    keywords: ["research", "study", "experiment", "analysis", "data"]
+    patterns: ["\\b(hypothesis|methodology|results)\\b"]
+    
+  business:
+    keywords: ["company", "market", "revenue", "strategy", "customer"]
+    patterns: ["\\b(profit|loss|investment|ROI)\\b"]
+    
+  education:
+    keywords: ["learn", "teach", "student", "course", "tutorial"]
+    patterns: ["\\b(lesson|chapter|exercise)\\b"]
+
+categories:
+  - "documentation"
+  - "tutorial" 
+  - "reference"
+  - "news"
+  - "blog"
+  - "academic"
+  - "technical"
+  - "general"
+
+topics:
+  auto_extract: true
+  min_topic_size: 10
+  max_topics: 50

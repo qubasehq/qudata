@@ -1,0 +1,509 @@
+# Enterprise QuData Pipeline Configuration
+# Advanced configuration for high-volume production environments
+
+# Pipeline metadata
+name: "enterprise-pipeline"
+version: "2.0"
+description: "Enterprise-grade configuration with advanced features"
+
+# Input data ingestion settings
+ingest:
+  # Comprehensive format support
+  formats: ["pdf", "docx", "txt", "html", "csv", "json", "xml", "rtf"]
+  
+  # Large file support
+  max_file_size: "1GB"
+  
+  # High-performance parallel processing
+  parallel_processing: true
+  max_workers: 16
+  
+  # Advanced OCR settings
+  ocr_enabled: true
+  ocr_languages: ["eng", "spa", "fra", "deu", "ita"]
+  ocr_confidence_threshold: 0.85
+  ocr_preprocessing:
+    enhance_contrast: true
+    remove_noise: true
+    deskew: true
+  
+  # Web scraping capabilities
+  web_scraping:
+    enabled: true
+    rate_limit: 20  # requests per second
+    timeout: 60
+    user_agent: "QuData-Enterprise/2.0"
+    respect_robots_txt: true
+    max_pages: 10000
+    
+  # Database integration
+  database:
+    enabled: true
+    connections:
+      - name: "content_db"
+        type: "postgresql"
+        host: "${DB_HOST}"
+        port: 5432
+        database: "content"
+        username: "${DB_USER}"
+        password: "${DB_PASSWORD}"
+        pool_size: 10
+      - name: "document_store"
+        type: "mongodb"
+        host: "${MONGO_HOST}"
+        port: 27017
+        database: "documents"
+        username: "${MONGO_USER}"
+        password: "${MONGO_PASSWORD}"
+    batch_size: 1000
+    timeout: 120
+  
+  # API integration
+  api_sources:
+    enabled: true
+    rate_limit: 100
+    timeout: 30
+    retry_attempts: 3
+    endpoints:
+      - name: "content_api"
+        url: "${CONTENT_API_URL}"
+        auth_type: "bearer"
+        token: "${API_TOKEN}"
+
+# Advanced data cleaning and preprocessing
+clean:
+  # Sophisticated duplicate detection
+  remove_duplicates: true
+  similarity_threshold: 0.85
+  similarity_algorithm: "cosine"  # or "jaccard", "levenshtein"
+  
+  # Multi-tier quality filtering
+  quality_tiers:
+    high: 0.9
+    medium: 0.7
+    low: 0.5
+  min_quality_score: 0.6
+  
+  # Multi-language support
+  language_filter: ["en", "es", "fr", "de", "it", "pt"]
+  language_confidence_threshold: 0.85
+  auto_translate: false
+  translation_service: "google"  # or "azure", "aws"
+  
+  # Advanced content cleaning
+  remove_boilerplate: true
+  boilerplate_patterns:
+    - "header"
+    - "footer" 
+    - "navigation"
+    - "sidebar"
+    - "advertisement"
+  
+  remove_html_tags: true
+  preserve_structure: true
+  normalize_whitespace: true
+  
+  # Comprehensive text normalization
+  unicode_normalization: "NFKC"
+  remove_accents: false
+  lowercase: false
+  fix_encoding_errors: true
+  
+  # PII detection and removal
+  pii_detection:
+    enabled: true
+    patterns:
+      - "email"
+      - "phone"
+      - "ssn"
+      - "credit_card"
+    action: "redact"  # or "remove", "mask"
+    replacement: "[REDACTED]"
+
+# Advanced content annotation and metadata extraction
+annotate:
+  # Enhanced Named Entity Recognition
+  enable_ner: true
+  ner_models:
+    - name: "spacy_large"
+      model: "en_core_web_lg"
+      languages: ["en"]
+    - name: "multilingual"
+      model: "xx_ent_wiki_sm"
+      languages: ["es", "fr", "de"]
+  ner_confidence_threshold: 0.85
+  custom_entities:
+    - "PRODUCT"
+    - "TECHNOLOGY"
+    - "METHODOLOGY"
+  
+  # Advanced content classification
+  enable_classification: true
+  classification_models:
+    - name: "domain_classifier"
+      type: "transformer"
+      model: "distilbert-base-uncased"
+      taxonomy_file: "configs/taxonomy.yaml"
+    - name: "topic_classifier"
+      type: "rule_based"
+      rules_file: "configs/topic_rules.yaml"
+  
+  # Topic modeling
+  enable_topic_modeling: true
+  topic_models:
+    - name: "bertopic"
+      algorithm: "bertopic"
+      num_topics: 50
+      min_topic_size: 10
+    - name: "lda"
+      algorithm: "lda"
+      num_topics: 30
+      passes: 10
+  
+  # Sentiment analysis
+  enable_sentiment: true
+  sentiment_model: "vader"  # or "textblob", "transformers"
+  
+  # Advanced quality scoring
+  quality_scoring:
+    weights:
+      length: 0.15
+      language: 0.25
+      coherence: 0.25
+      uniqueness: 0.20
+      structure: 0.10
+      readability: 0.05
+    thresholds:
+      min_length: 50
+      max_length: 50000
+      min_sentences: 3
+      max_sentences: 1000
+    readability_metrics:
+      - "flesch_kincaid"
+      - "gunning_fog"
+      - "coleman_liau"
+
+# Comprehensive quality assessment
+score:
+  enabled: true
+  
+  # Multi-dimensional scoring
+  dimensions:
+    - name: "content_quality"
+      weight: 0.4
+      metrics: ["length", "coherence", "readability"]
+    - name: "technical_quality"
+      weight: 0.3
+      metrics: ["encoding", "structure", "completeness"]
+    - name: "semantic_quality"
+      weight: 0.3
+      metrics: ["language", "uniqueness", "relevance"]
+  
+  # Quality benchmarks
+  benchmarks:
+    enabled: true
+    reference_datasets:
+      - "high_quality_corpus"
+      - "domain_specific_corpus"
+    
+  # Quality reporting
+  reporting:
+    enabled: true
+    frequency: "daily"
+    recipients: ["data-team@company.com"]
+
+# Advanced data packaging
+pack:
+  # Multiple output formats
+  formats: ["jsonl", "chatml", "parquet", "arrow"]
+  
+  # JSONL format with advanced options
+  jsonl:
+    fields: ["text", "metadata", "quality_score", "annotations", "embeddings"]
+    filter_low_quality: true
+    min_quality_score: 0.7
+    max_tokens_per_line: 16384
+    compression: "gzip"
+    encoding: "utf-8"
+    
+  # ChatML format for conversational AI
+  chatml:
+    system_message: "You are a knowledgeable assistant with expertise in various domains."
+    include_metadata: true
+    max_tokens_per_message: 8192
+    conversation_formats:
+      - "qa"
+      - "instruction"
+      - "dialogue"
+    role_mapping:
+      instruction: "user"
+      response: "assistant"
+      context: "system"
+  
+  # Parquet format for analytics
+  parquet:
+    compression: "snappy"
+    row_group_size: 100000
+    page_size: 2048
+    use_dictionary: true
+    write_statistics: true
+    schema_validation: true
+  
+  # Arrow format for high-performance processing
+  arrow:
+    compression: "lz4"
+    batch_size: 10000
+
+# Comprehensive export configuration
+export:
+  # Output management
+  output_dir: "/data/processed"
+  backup_dir: "/data/backup"
+  
+  # Advanced dataset splitting
+  splits:
+    enabled: true
+    strategy: "stratified"  # or "random", "temporal"
+    ratios: [0.7, 0.15, 0.15]  # train, validation, test
+    stratify_by: ["domain", "quality_tier"]
+    random_seed: 42
+    
+  # Cross-validation splits
+  cross_validation:
+    enabled: true
+    folds: 5
+    strategy: "stratified"
+  
+  # Metadata and annotations
+  include_metadata: true
+  metadata_fields: 
+    - "source"
+    - "quality_score"
+    - "language"
+    - "domain"
+    - "topics"
+    - "entities"
+    - "sentiment"
+    - "processing_timestamp"
+  
+  # Data versioning
+  versioning:
+    enabled: true
+    version_format: "v{major}.{minor}.{patch}"
+    auto_increment: true
+    
+  # Export validation
+  validation:
+    enabled: true
+    schema_validation: true
+    quality_checks: true
+    format_compliance: true
+
+# High-performance configuration
+performance:
+  # Resource management
+  max_memory_usage: "32GB"
+  batch_size: 200
+  streaming_mode: true
+  
+  # Advanced parallel processing
+  parallel_processing:
+    enabled: true
+    max_workers: 32
+    worker_type: "process"  # or "thread"
+    chunk_size: 100
+  
+  # Distributed processing
+  distributed:
+    enabled: false  # Enable for cluster deployment
+    backend: "dask"  # or "ray", "spark"
+    scheduler_address: "tcp://scheduler:8786"
+    
+  # Caching and optimization
+  caching:
+    enabled: true
+    cache_dir: "/cache/qudata"
+    cache_size: "10GB"
+    cache_levels:
+      - "file_metadata"
+      - "extraction_results"
+      - "cleaning_results"
+      - "annotation_results"
+    ttl: 86400  # 24 hours
+  
+  # GPU acceleration
+  gpu:
+    enabled: false  # Enable if GPU available
+    device: "cuda:0"
+    memory_fraction: 0.8
+    models_on_gpu: ["ner", "classification", "embeddings"]
+
+# Enterprise monitoring and logging
+monitoring:
+  # Metrics collection
+  metrics:
+    enabled: true
+    backend: "prometheus"  # or "datadog", "cloudwatch"
+    endpoint: "http://prometheus:9090"
+    push_interval: 30
+    
+  # Health checks
+  health_checks:
+    enabled: true
+    interval: 60
+    endpoints:
+      - "/health"
+      - "/metrics"
+      - "/status"
+  
+  # Alerting
+  alerts:
+    enabled: true
+    channels:
+      - type: "email"
+        recipients: ["ops-team@company.com"]
+      - type: "slack"
+        webhook: "${SLACK_WEBHOOK_URL}"
+      - type: "pagerduty"
+        service_key: "${PAGERDUTY_SERVICE_KEY}"
+    rules:
+      - name: "high_error_rate"
+        condition: "error_rate > 0.05"
+        severity: "critical"
+      - name: "low_quality_trend"
+        condition: "avg_quality < 0.7"
+        severity: "warning"
+      - name: "processing_delay"
+        condition: "processing_time > 300"
+        severity: "warning"
+
+# Comprehensive logging
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s"
+  
+  # Multiple log outputs
+  handlers:
+    - type: "file"
+      filename: "logs/pipeline.log"
+      max_size: "100MB"
+      backup_count: 10
+    - type: "syslog"
+      address: "localhost:514"
+      facility: "local0"
+    - type: "elasticsearch"
+      hosts: ["elasticsearch:9200"]
+      index: "qudata-logs"
+  
+  # Structured logging
+  structured: true
+  include_context: true
+  
+  # Log sampling for high-volume scenarios
+  sampling:
+    enabled: true
+    rate: 0.1  # Log 10% of debug messages
+
+# Advanced error handling and recovery
+error_handling:
+  # Error tolerance
+  continue_on_error: true
+  max_errors: 1000
+  error_threshold: 0.1  # Stop if error rate > 10%
+  
+  # Retry logic
+  retry:
+    enabled: true
+    max_attempts: 3
+    backoff_factor: 2
+    max_delay: 300
+    
+  # Error classification
+  error_categories:
+    - name: "transient"
+      retry: true
+      examples: ["network_timeout", "temporary_unavailable"]
+    - name: "permanent"
+      retry: false
+      examples: ["file_not_found", "invalid_format"]
+    - name: "critical"
+      retry: false
+      escalate: true
+      examples: ["out_of_memory", "disk_full"]
+  
+  # Error reporting
+  reporting:
+    enabled: true
+    aggregation_window: 300  # 5 minutes
+    include_stack_trace: true
+    error_log: "logs/errors.log"
+    
+  # Recovery mechanisms
+  recovery:
+    checkpointing: true
+    checkpoint_interval: 1000  # documents
+    auto_resume: true
+    cleanup_on_failure: false
+
+# Security and compliance
+security:
+  # Data encryption
+  encryption:
+    enabled: true
+    algorithm: "AES-256"
+    key_management: "vault"  # or "kms", "local"
+    
+  # Access control
+  access_control:
+    enabled: true
+    authentication: "oauth2"  # or "ldap", "saml"
+    authorization: "rbac"
+    
+  # Audit logging
+  audit:
+    enabled: true
+    log_file: "logs/audit.log"
+    events:
+      - "data_access"
+      - "configuration_change"
+      - "export_operation"
+      
+  # Compliance
+  compliance:
+    gdpr: true
+    hipaa: false
+    sox: false
+    data_retention_days: 2555  # 7 years
+
+# Integration settings
+integrations:
+  # LLMBuilder integration
+  llmbuilder:
+    enabled: true
+    export_path: "/llmbuilder/data/clean"
+    auto_trigger_training: true
+    model_configs:
+      - "base_model.yaml"
+      - "fine_tuned_model.yaml"
+  
+  # External APIs
+  apis:
+    - name: "quality_service"
+      url: "${QUALITY_API_URL}"
+      auth: "api_key"
+      key: "${QUALITY_API_KEY}"
+    - name: "annotation_service"
+      url: "${ANNOTATION_API_URL}"
+      auth: "oauth2"
+      client_id: "${ANNOTATION_CLIENT_ID}"
+      client_secret: "${ANNOTATION_CLIENT_SECRET}"
+  
+  # Message queues
+  messaging:
+    enabled: true
+    backend: "kafka"  # or "rabbitmq", "redis"
+    brokers: ["kafka1:9092", "kafka2:9092"]
+    topics:
+      - "document_processed"
+      - "quality_alert"
+      - "export_complete"
