@@ -13,7 +13,25 @@ import math
 from typing import List, Dict, Optional, Union, Tuple
 from dataclasses import dataclass
 from collections import Counter
-import tiktoken
+
+# Make tiktoken optional to avoid hard failure when not installed
+try:
+    import tiktoken  # type: ignore
+    _HAS_TIKTOKEN = True
+except Exception:
+    tiktoken = None  # type: ignore
+    _HAS_TIKTOKEN = False
+
+# Simple fallback encoder if tiktoken is unavailable
+class _FallbackEncoding:
+    """Lightweight fallback tokenizer approximation when tiktoken is missing."""
+    def encode(self, text: str):
+        # Approximate tokens via word and punctuation segmentation
+        tokens = re.findall(r"\b\w+\b|[^\w\s]", text, flags=re.UNICODE)
+        if tokens:
+            return tokens
+        # Final fallback: approx 1 token per 4 chars
+        return [""] * max(1, len(text) // 4)
 
 
 @dataclass
@@ -105,11 +123,14 @@ class TokenizationPreview:
         self.model_config = self.MODEL_CONFIGS.get(model_name, self.MODEL_CONFIGS['gpt-3.5-turbo'])
         
         # Initialize tokenizer
-        try:
-            self.encoding = tiktoken.get_encoding(self.model_config['encoding'])
-        except Exception:
-            # Fallback to default encoding
-            self.encoding = tiktoken.get_encoding('cl100k_base')
+        if _HAS_TIKTOKEN:
+            try:
+                self.encoding = tiktoken.get_encoding(self.model_config['encoding'])
+            except Exception:
+                # Fallback to default encoding
+                self.encoding = tiktoken.get_encoding('cl100k_base')
+        else:
+            self.encoding = _FallbackEncoding()
         
         # Compile regex patterns for fallback tokenization
         self._word_pattern = re.compile(r'\b\w+\b')
@@ -344,20 +365,26 @@ class TokenizationPreview:
             if model in self.MODEL_CONFIGS:
                 self.model_name = model
                 self.model_config = self.MODEL_CONFIGS[model]
-                try:
-                    self.encoding = tiktoken.get_encoding(self.model_config['encoding'])
-                except Exception:
-                    self.encoding = tiktoken.get_encoding('cl100k_base')
+                if _HAS_TIKTOKEN:
+                    try:
+                        self.encoding = tiktoken.get_encoding(self.model_config['encoding'])
+                    except Exception:
+                        self.encoding = tiktoken.get_encoding('cl100k_base')
+                else:
+                    self.encoding = _FallbackEncoding()
                 
                 results[model] = self.analyze_text(text)
         
         # Restore original model
         self.model_name = original_model
         self.model_config = self.MODEL_CONFIGS[original_model]
-        try:
-            self.encoding = tiktoken.get_encoding(self.model_config['encoding'])
-        except Exception:
-            self.encoding = tiktoken.get_encoding('cl100k_base')
+        if _HAS_TIKTOKEN:
+            try:
+                self.encoding = tiktoken.get_encoding(self.model_config['encoding'])
+            except Exception:
+                self.encoding = tiktoken.get_encoding('cl100k_base')
+        else:
+            self.encoding = _FallbackEncoding()
         
         return results
     

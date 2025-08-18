@@ -203,7 +203,6 @@ def run_export_command(args):
     print("Export functionality not yet implemented!")
     return 0
 
-
 def run_clean_command(args):
     """Run the clean command."""
     from .clean import ComprehensiveCleaningPipeline
@@ -217,9 +216,6 @@ def run_clean_command(args):
     # This would need to be implemented to handle directory cleaning
     print("✅ Cleaning completed!")
     return 0
-
-if __name__ == "__main__":
-    sys.exit(main())
 
 def run_analyze_command(args):
     """Run the analyze command."""
@@ -509,3 +505,8 @@ def run_config_command(args):
             return 1
     
     return 0
+
+
+# Ensure CLI entrypoint runs after all handlers are defined
+if __name__ == "__main__":
+    sys.exit(main())
