@@ -172,13 +172,14 @@ class ComprehensiveCleaningPipeline:
         lang_config = self.config.get('language_detection', {})
         self.language_detector = LanguageDetector(lang_config)
     
-    def clean_text(self, text: str, document_id: str = None) -> CleaningResult:
+    def clean_text(self, text: str, document_id: str = None, content_type: str = 'txt') -> CleaningResult:
         """
         Clean a single text using the comprehensive pipeline.
         
         Args:
             text: Input text to clean
             document_id: Optional document identifier
+            content_type: Type of content (txt, html, json, etc.)
             
         Returns:
             CleaningResult with cleaned text and metadata
@@ -192,12 +193,32 @@ class ComprehensiveCleaningPipeline:
         )
         
         try:
-            current_text = text
+            # Use comprehensive preprocessor for advanced cleaning
+            from .comprehensive_preprocessor import ComprehensivePreprocessor
             
-            # Step 1: Text normalization
-            if self.enable_normalization and current_text:
-                norm_result = self.normalizer.normalize_text(current_text)
-                current_text = norm_result.normalized_text
+            preprocessor = ComprehensivePreprocessor(self.config)
+            preprocessing_result = preprocessor.preprocess_content(text, content_type, document_id)
+            
+            # Map preprocessing result to cleaning result
+            result.cleaned_text = preprocessing_result.processed_content
+            result.quality_score = preprocessing_result.quality_score
+            result.processing_time = preprocessing_result.processing_time
+            result.stages_applied = preprocessing_result.stages_applied
+            result.validation_passed = preprocessing_result.validation_passed
+            result.validation_errors = preprocessing_result.validation_errors
+            result.validation_warnings = preprocessing_result.validation_warnings
+            
+            # Legacy fallback for older pipeline components if comprehensive preprocessing fails
+            if not preprocessing_result.validation_passed and preprocessing_result.processed_content:
+                current_text = preprocessing_result.processed_content
+            elif not preprocessing_result.validation_passed:
+                # Fall back to legacy cleaning
+                current_text = text
+                
+                # Step 1: Text normalization
+                if self.enable_normalization and current_text:
+                    norm_result = self.normalizer.normalize_text(current_text)
+                    current_text = norm_result.normalized_text
                 result.normalization_result = norm_result
                 result.operations_applied.extend(norm_result.corrections_applied)
                 
@@ -259,7 +280,7 @@ class ComprehensiveCleaningPipeline:
         
         return result
     
-    def clean_documents(self, documents: Dict[str, str]) -> BatchCleaningResult:
+    def clean_documents(self, documents: Dict[str, str], content_types: Dict[str, str] = None) -> BatchCleaningResult:
         """
         Clean multiple documents with optional deduplication.
         
@@ -278,7 +299,8 @@ class ComprehensiveCleaningPipeline:
         # Step 1: Clean individual documents
         for doc_id, content in documents.items():
             try:
-                cleaning_result = self.clean_text(content, doc_id)
+                content_type = content_types.get(doc_id, 'txt') if content_types else 'txt'
+                cleaning_result = self.clean_text(content, doc_id, content_type)
                 batch_result.document_results[doc_id] = cleaning_result
                 batch_result.processed_documents += 1
                 
