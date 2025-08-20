@@ -1,51 +1,46 @@
-annotate:
-  enabled: true
-  ner: true
-  safety: false
-  taxonomy: true
-  topics: false
-checkpoint_enabled: true
-clean:
-  deduplicate: true
-  enabled: true
-  max_length: 100000
-  min_length: 100
-  normalize_unicode: true
-  remove_boilerplate: true
-export:
-  compress_output: false
-  create_manifest: true
-  enabled: true
-  llmbuilder_path: ../llmbuilder/data/cleaned
-ingest:
-  enabled: true
-  file_types:
-  - txt
-  - md
-  - html
-  - pdf
-  - docx
-  - epub
-  max_file_size: 100MB
-  parallel_workers: 4
-log_level: INFO
-name: qudata
-pack:
-  enabled: true
-  formats:
-  - jsonl
-  - chatml
-  - plain
-  max_records_per_file: 10000
-parallel_processing: true
-paths: null
-score:
-  enabled: true
-  min_quality_score: 0.7
-  weights:
-    coherence: 0.3
-    language: 0.2
-    length: 0.2
-    readability: 0.1
-    uniqueness: 0.2
-version: 1.0.0
+# QuData Pipeline Configuration
+pipeline:
+  name: "qudata"
+  version: "1.0.0"
+  
+  # Input/Output paths
+  paths:
+    raw_data: "data/raw"
+    staging: "data/staging"
+    processed: "data/processed"
+    exports: "data/exports"
+    
+  # Processing stages
+  stages:
+    ingest:
+      enabled: true
+      file_types: [
+        "txt", "markdown", "md", "html", "htm", "xhtml",
+        "pdf", "doc", "docx", "rtf", "xml",
+        "json", "jsonl", "csv", "tsv", "epub",
+        "png", "jpeg", "gif", "bmp", "tiff", "webp", "svg"
+      ]
+      max_file_size: "100MB"
+      
+    clean:
+      enabled: true
+      normalize_unicode: true
+      remove_boilerplate: true
+      deduplicate: true
+      
+    annotate:
+      enabled: true
+      taxonomy: true
+      ner: true
+      
+    score:
+      enabled: true
+      min_quality_score: 0.7
+      
+    pack:
+      enabled: true
+      formats: ["jsonl", "chatml", "plain"]
+      
+    export:
+      enabled: true
+      llmbuilder_path: "../llmbuilder/data/cleaned"

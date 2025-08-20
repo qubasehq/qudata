@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qudata"
-version = "2.0.5"
+version = "2.2.1"
 description = "Data processing pipeline for LLM training datasets"
 authors = [{name = "Qub△se Team"}]
 license = "MIT"

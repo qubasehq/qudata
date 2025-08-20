@@ -318,6 +318,7 @@ class QuDataPipeline:
                     'text': 'txt',
                     'htm': 'html',
                     'xhtml': 'html',
+                    'xml': 'svg',  # SVG files are detected as XML but should be handled as SVG
                 }
                 allowed_types = set(self.config.ingest.file_types or [])
                 allowed_norm = {type_map.get(t.lower(), t.lower()) for t in allowed_types}
@@ -326,14 +327,24 @@ class QuDataPipeline:
                     logger.warning(f"Skipping unsupported type '{file_type}' for file: {file_path}")
                     continue
 
+                # Apply type mapping before getting extractor
+                mapped_file_type = type_map.get((file_type or '').lower(), file_type)
+                
                 # Get appropriate extractor
-                extractor = self._resolve_extractor(file_type)
+                extractor = self._resolve_extractor(mapped_file_type)
                 if not extractor:
                     logger.warning(f"No extractor for file type: {file_type}")
                     continue
                 
+                logger.debug(f"Processing file: {file_path} with extractor: {type(extractor).__name__}")
+                
                 # Extract content
                 extracted = extractor.extract(str(file_path))
+                logger.debug(f"Extracted content length: {len(extracted.content) if extracted.content else 0}")
+                
+                if not extracted.content or len(extracted.content.strip()) == 0:
+                    logger.warning(f"No content extracted from {file_path}")
+                    continue
                 
                 # Create document
                 from .models import create_document_from_extracted
@@ -342,6 +353,7 @@ class QuDataPipeline:
                     f"doc_{len(documents)}"
                 )
                 documents.append(document)
+                logger.debug(f"Successfully created document {document.id} from {file_path}")
                 
             except Exception as e:
                 logger.error(f"Failed to process {file_path}: {e}")
@@ -354,18 +366,25 @@ class QuDataPipeline:
         
         # Prepare documents for batch cleaning
         doc_content = {doc.id: doc.content for doc in documents}
+        logger.debug(f"_clean_documents input: {len(documents)} docs, content lengths: {[len(c) for c in doc_content.values()]}")
         
         # Run cleaning pipeline
         batch_result = self.cleaning_pipeline.clean_documents(doc_content)
+        logger.debug(f"Batch cleaning result: total={batch_result.total_documents}, processed={batch_result.processed_documents}, failed={batch_result.failed_documents}")
+        for doc_id, res in batch_result.document_results.items():
+            logger.debug(f"Doc {doc_id}: errors={res.errors}, quality={res.quality_score}, len={len(res.cleaned_text)}")
         
         # Update documents with cleaned content
         for document in documents:
             if document.id in batch_result.document_results:
                 cleaning_result = batch_result.document_results[document.id]
-                if not cleaning_result.errors:
+                if not cleaning_result.errors and cleaning_result.cleaned_text.strip():
                     document.content = cleaning_result.cleaned_text
                     cleaned_documents.append(document)
+                else:
+                    logger.warning(f"Document {document.id} rejected: errors={cleaning_result.errors}, empty={not cleaning_result.cleaned_text.strip()}")
         
+        logger.debug(f"_clean_documents output: {len(cleaned_documents)} docs")
         return cleaned_documents
     
     def _annotate_documents(self, documents: List[Document]) -> List[Document]:
@@ -455,9 +474,34 @@ class QuDataPipeline:
                 overall_score=avg_quality
             )
             
-            # Determine exports root: sibling 'exports' next to provided output directory
+            # Determine sibling roots next to provided output directory
+            # - processed/: normalized final documents (JSONL for canonical processed view)
+            # - exports/: end-user export formats (jsonl/chatml/plain/llmbuilder)
+            processed_root = output_path.parent / "processed"
             exports_root = output_path.parent / "exports"
+            processed_root.mkdir(parents=True, exist_ok=True)
             exports_root.mkdir(parents=True, exist_ok=True)
+
+            # Always write processed JSONL snapshot to processed/ for downstream consumption
+            try:
+                processed_jsonl = processed_root / "dataset.jsonl"
+                with open(processed_jsonl, 'w', encoding='utf-8') as f:
+                    for doc in documents:
+                        obj = {
+                            "id": doc.id,
+                            "text": doc.content,
+                            "metadata": {
+                                "source_path": doc.source_path,
+                                "file_type": doc.metadata.file_type,
+                                "language": doc.metadata.language,
+                                "domain": doc.metadata.domain,
+                                "quality_score": doc.metadata.quality_score,
+                            },
+                        }
+                        f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+                export_paths['processed'] = str(processed_jsonl)
+            except Exception as pe:
+                logger.warning(f"Failed writing processed JSONL: {pe}")
 
             # Export to LLMBuilder under exports
             export_result = self.llmbuilder_connector.export_to_llmbuilder(

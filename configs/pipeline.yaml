@@ -14,7 +14,12 @@ pipeline:
   stages:
     ingest:
       enabled: true
-      file_types: ["txt", "md", "html", "pdf", "docx", "epub"]
+      file_types: [
+        "txt", "markdown", "md", "html", "htm", "xhtml",
+        "pdf", "doc", "docx", "rtf", "xml",
+        "json", "jsonl", "csv", "tsv", "epub",
+        "png", "jpeg", "gif", "bmp", "tiff", "webp", "svg"
+      ]
       max_file_size: "100MB"
       
     clean:

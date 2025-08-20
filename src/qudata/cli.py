@@ -55,8 +55,11 @@ Examples:
     process_parser.add_argument('--config', default='configs/pipeline.yaml', help='Pipeline config')
     process_parser.add_argument('--format', default='jsonl', choices=['jsonl', 'chatml', 'alpaca', 'plain'], help='Output format')
     process_parser.add_argument('--parallel', type=int, default=1, help='Number of parallel workers')
-    process_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output')
-    process_parser.add_argument('--progress', action='store_true', help='Show progress bars during processing')
+    process_parser.add_argument('--verbose', '-v', action='store_true', help='Verbose output (INFO level)')
+    # Only show debug-level logs if --debug/--dbug is explicitly passed
+    process_parser.add_argument('--debug', '--dbug', dest='debug', action='store_true', help='Enable debug logging (DEBUG level)')
+    process_parser.add_argument('--progress', action='store_true', default=True, help='Show progress bars during processing')
+    process_parser.add_argument('--no-progress', dest='progress', action='store_false', help='Disable progress bars')
     
     # Export command
     export_parser = subparsers.add_parser('export', help='Export processed data')
@@ -197,13 +200,59 @@ def run_process_command(args):
     
     print(f"Processing {args.input} -> {args.output}")
     print(f"Using config: {args.config}")
+    # Friendly notes: print small steps so users see progress immediately
+    print("⏳ Setting things up...", flush=True)
     
-    # Configure logging and suppress known noisy PDF warnings while keeping real errors visible
+    # Configure logging and suppress known noisy PDF/Numba warnings while keeping real errors visible
     try:
         import logging
 
-        # Honor verbosity flag
-        logging.basicConfig(level=logging.DEBUG if getattr(args, 'verbose', False) else logging.INFO)
+        # Default to INFO; only use DEBUG when --debug/--dbug provided
+        log_level = logging.DEBUG if getattr(args, 'debug', False) else logging.INFO
+        
+        # Custom colored formatter
+        class ColoredFormatter(logging.Formatter):
+            COLORS = {
+                'DEBUG': '\033[94m',     # Blue
+                'INFO': '\033[0m',       # Default color for INFO prefix
+                'WARNING': '\033[93m',   # Yellow
+                'ERROR': '\033[91m',     # Red
+                'CRITICAL': '\033[95m',  # Magenta
+                'RESET': '\033[0m',      # Reset
+                'GREEN': '\033[92m',     # Green for INFO content
+                'LIGHT_BLUE': '\033[96m' # Light blue
+            }
+            
+            def format(self, record):
+                # Get the original formatted message
+                original = super().format(record)
+                
+                if record.levelname == 'DEBUG':
+                    # Make entire DEBUG message blue
+                    return f"{self.COLORS['DEBUG']}{original}{self.COLORS['RESET']}"
+                elif record.levelname == 'INFO':
+                    # For INFO messages, color text after the first colon green
+                    if ':' in original:
+                        parts = original.split(':', 1)
+                        if len(parts) == 2:
+                            prefix = parts[0] + ':'
+                            content = parts[1]
+                            return f"{prefix}{self.COLORS['GREEN']}{content}{self.COLORS['RESET']}"
+                    return original
+                else:
+                    # Other log levels keep default coloring
+                    color = self.COLORS.get(record.levelname, '')
+                    return f"{color}{original}{self.COLORS['RESET']}" if color else original
+        
+        # Set up colored logging
+        handler = logging.StreamHandler()
+        handler.setFormatter(ColoredFormatter('%(levelname)s:%(name)s:%(message)s'))
+        
+        # Configure root logger
+        root_logger = logging.getLogger()
+        root_logger.handlers.clear()
+        root_logger.addHandler(handler)
+        root_logger.setLevel(log_level)
 
         class _PdfColorWarningFilter(logging.Filter):
             """Filter out noisy pdfminer color warnings like:
@@ -228,15 +277,23 @@ def run_process_command(args):
         ]
         for lg in noisy_pdf_loggers:
             lg.addFilter(_PdfColorWarningFilter())
-            # Keep them at WARNING unless verbose is on
-            if not getattr(args, 'verbose', False):
+            # Keep them at WARNING unless DEBUG is on
+            if not getattr(args, 'debug', False):
                 lg.setLevel(logging.WARNING)
+
+        # Quiet Numba unless explicit debug requested (these logs can be extremely verbose)
+        if not getattr(args, 'debug', False):
+            logging.getLogger("numba").setLevel(logging.WARNING)
+            logging.getLogger("numba.core").setLevel(logging.WARNING)
+        # After logging is configured, print the next step
+        print("🧩 Starting services and components...", flush=True)
     except Exception:
         # Best-effort; continue if logging setup fails
         pass
 
     # Initialize pipeline
-    pipeline = QuDataPipeline(config_path=args.config, show_progress=getattr(args, 'progress', False))
+    print("🚀 Almost there...", flush=True)
+    pipeline = QuDataPipeline(config_path=args.config, show_progress=getattr(args, 'progress', True))
     
     # Run processing
     result = pipeline.process_directory(args.input, args.output)

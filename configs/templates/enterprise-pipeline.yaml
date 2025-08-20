@@ -9,7 +9,7 @@ description: "Enterprise-grade configuration with advanced features"
 # Input data ingestion settings
 ingest:
   # Comprehensive format support
-  formats: ["pdf", "docx", "txt", "html", "csv", "json", "xml", "rtf"]
+  formats: ["txt", "md", "html", "htm", "xhtml", "pdf", "docx", "epub", "csv", "json", "jsonl", "tsv", "svg", "xml", "rtf"]
   
   # Large file support
   max_file_size: "1GB"

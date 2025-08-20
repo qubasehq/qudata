@@ -19,7 +19,7 @@ except ImportError:
 
 from ..models import (
     BaseExtractor, ExtractedContent, FileMetadata, DocumentStructure,
-    ProcessingError, ErrorSeverity
+    ProcessingError, ErrorSeverity, parse_file_size
 )
 
 
@@ -42,12 +42,12 @@ class PlainTextExtractor(BaseExtractor):
         
         Args:
             config: Configuration dictionary with options like:
-                - max_file_size: Maximum file size to process (default: 100MB)
+                - max_file_size: Maximum file size to process (default: 10MB)
                 - encoding_detection: Whether to use automatic encoding detection
                 - preserve_whitespace: Whether to preserve original whitespace
         """
         super().__init__(config)
-        self.max_file_size = self._coerce_size(self.config.get('max_file_size', 100 * 1024 * 1024))  # 100MB default
+        self.max_file_size = parse_file_size(self.config.get('max_file_size', 10 * 1024 * 1024))  # 10MB default
         self.encoding_detection = self.config.get('encoding_detection', True)
         self.preserve_whitespace = self.config.get('preserve_whitespace', False)
 
@@ -559,6 +559,15 @@ class ExtractorFactory:
         except ImportError:
             pass  # Structured extractor not available
     
+    @classmethod
+    def _register_image_extractor(cls):
+        """Register Image extractor for SVG files."""
+        try:
+            from .image import ImageExtractor
+            cls._extractors['svg'] = ImageExtractor
+        except ImportError:
+            pass  # Image extractor not available
+    
     # Auto-register extractors when module is loaded
     @classmethod
     def _auto_register_extractors(cls):
@@ -567,6 +576,7 @@ class ExtractorFactory:
         cls._register_document_extractor()
         cls._register_web_extractor()
         cls._register_structured_extractor()
+        cls._register_image_extractor()
     
     @classmethod
     def create_extractor(cls, file_type: str, config: Dict[str, Any] = None) -> Optional[BaseExtractor]:

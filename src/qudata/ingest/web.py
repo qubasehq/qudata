@@ -27,7 +27,7 @@ except ImportError:
 
 from ..models import (
     BaseExtractor, ExtractedContent, FileMetadata, DocumentStructure,
-    ProcessingError, ErrorSeverity, TableData, ImageData
+    ProcessingError, ErrorSeverity, TableData, ImageData, parse_file_size
 )
 
 
@@ -63,7 +63,7 @@ class WebExtractor(BaseExtractor):
                 "Install it with: pip install beautifulsoup4"
             )
         
-        self.max_file_size = self.config.get('max_file_size', 50 * 1024 * 1024)  # 50MB
+        self.max_file_size = parse_file_size(self.config.get('max_file_size', 50 * 1024 * 1024))  # 50MB
         self.extract_tables = self.config.get('extract_tables', True)
         self.extract_images = self.config.get('extract_images', True)
         self.use_readability = self.config.get('use_readability', True) and HAS_READABILITY
@@ -519,12 +519,24 @@ class WebExtractor(BaseExtractor):
                 
                 # Convert width/height to integers if possible
                 try:
-                    width = int(width) if width else None
+                    if width is not None:
+                        # Handle string values that might contain 'px' or other units
+                        if isinstance(width, str):
+                            width = re.sub(r'[^\d]', '', width)
+                        width = int(width) if width else None
+                    else:
+                        width = None
                 except (ValueError, TypeError):
                     width = None
                 
                 try:
-                    height = int(height) if height else None
+                    if height is not None:
+                        # Handle string values that might contain 'px' or other units
+                        if isinstance(height, str):
+                            height = re.sub(r'[^\d]', '', height)
+                        height = int(height) if height else None
+                    else:
+                        height = None
                 except (ValueError, TypeError):
                     height = None
                 

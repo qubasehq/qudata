@@ -96,12 +96,16 @@ class TopicModeler:
         self.max_document_frequency = self.config.get("max_document_frequency", 0.8)
         self.stopwords = self._load_stopwords()
         
-        # Try to import optional dependencies
-        self.sklearn_available = self._check_sklearn()
-        self.bertopic_available = self._check_bertopic()
         # Strict flags
         self.strict = bool(self.config.get("strict", False))
         self.require_bertopic = bool(self.config.get("require_bertopic", False))
+
+        # Placeholders for optional dependency state/details
+        self.bertopic_error: Optional[str] = None
+        
+        # Try to import optional dependencies
+        self.sklearn_available = self._check_sklearn()
+        self.bertopic_available = self._check_bertopic()
         
     def _check_sklearn(self) -> bool:
         """Check if scikit-learn is available."""
@@ -113,12 +117,28 @@ class TopicModeler:
             return False
     
     def _check_bertopic(self) -> bool:
-        """Check if BERTopic is available."""
+        """Check if BERTopic is available.
+
+        Catches broad exceptions to handle cases where importing BERTopic pulls in
+        SpaCy/Thinc C-extensions that may fail due to NumPy ABI mismatches.
+        """
         try:
-            import bertopic
+            import bertopic  # noqa: F401
             return True
-        except ImportError:
-            logger.warning("BERTopic not available. Advanced topic modeling will be limited.")
+        except Exception as e:
+            # Build a helpful message with common root-cause guidance
+            base_msg = f"BERTopic import failed: {e}"
+            text = str(e)
+            guidance = ""
+            if "numpy.dtype size changed" in text or ("dtype" in text and "PyObject" in text and "numpy" in text):
+                guidance = (
+                    " Likely NumPy/Thinc binary ABI mismatch. If you need BERTopic, align versions in your venv: "
+                    "install a compatible NumPy first (e.g., numpy==1.26.4), then reinstall thinc/spacy/bertopic "
+                    "(e.g., thinc==8.2.5, spacy==3.7.4, bertopic==0.16.4) and required deps (umap-learn, hdbscan, scikit-learn)."
+                )
+            full_msg = base_msg + guidance
+            self.bertopic_error = full_msg
+            logger.warning("BERTopic not available. " + full_msg)
             return False
     
     def _load_stopwords(self) -> Set[str]:
@@ -170,7 +190,8 @@ class TopicModeler:
             return self._perform_bertopic_modeling(documents, num_topics)
         elif method == "bertopic" and not self.bertopic_available:
             if self.strict or self.require_bertopic:
-                raise RuntimeError("BERTopic requested but not available. Install 'bertopic' and dependencies.")
+                detail = self.bertopic_error or "Install 'bertopic' and its dependencies."
+                raise RuntimeError(f"BERTopic requested but not available. {detail}")
             logger.info("BERTopic not available; falling back to simple topic modeling")
             return self._perform_simple_modeling(documents, num_topics)
         elif method == "lda" and not self.sklearn_available:

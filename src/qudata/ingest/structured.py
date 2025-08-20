@@ -15,7 +15,7 @@ from io import StringIO
 
 from ..models import (
     BaseExtractor, ExtractedContent, FileMetadata, DocumentStructure,
-    ProcessingError, ErrorSeverity, TableData
+    ProcessingError, ErrorSeverity, TableData, parse_file_size
 )
 
 
@@ -42,7 +42,7 @@ class StructuredExtractor(BaseExtractor):
                 - strict_parsing: Whether to use strict parsing (default: False)
         """
         super().__init__(config)
-        self.max_file_size = self.config.get('max_file_size', 100 * 1024 * 1024)  # 100MB
+        self.max_file_size = parse_file_size(self.config.get('max_file_size', 100 * 1024 * 1024))  # 100MB
         self.csv_delimiter = self.config.get('csv_delimiter', None)  # Auto-detect if None
         self.json_max_depth = self.config.get('json_max_depth', 10)
         self.encoding = self.config.get('encoding', 'utf-8')

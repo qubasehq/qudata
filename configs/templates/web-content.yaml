@@ -23,7 +23,7 @@ pipeline:
 # Ingestion configuration for web content
 ingest:
   # Focus on HTML and text files
-  file_types: ["html", "htm", "txt", "md"]
+  file_types: ["html", "htm", "xhtml", "txt", "md", "csv", "json", "jsonl", "tsv", "svg"]
   
   # Web content is typically smaller
   max_file_size: "10MB"

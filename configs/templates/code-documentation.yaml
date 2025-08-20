@@ -23,7 +23,7 @@ pipeline:
 # Ingestion configuration for code documentation
 ingest:
   # Focus on documentation formats
-  file_types: ["md", "rst", "txt", "html", "ipynb"]
+  file_types: ["md", "rst", "txt", "html", "htm", "xhtml", "ipynb", "csv", "json", "jsonl", "tsv", "svg", "pdf", "docx", "epub"]
   
   # Documentation files are typically moderate size
   max_file_size: "20MB"

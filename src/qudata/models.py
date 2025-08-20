@@ -13,6 +13,56 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 from pathlib import Path
+import re
+
+
+def parse_file_size(size_str: Union[str, int]) -> int:
+    """
+    Parse file size string (e.g., '100MB', '1GB') to bytes.
+    
+    Args:
+        size_str: Size string or integer
+        
+    Returns:
+        Size in bytes as integer
+    """
+    if isinstance(size_str, int):
+        return size_str
+    
+    if isinstance(size_str, str):
+        # Remove whitespace and convert to uppercase
+        size_str = size_str.strip().upper()
+        
+        # Extract number and unit
+        match = re.match(r'^(\d+(?:\.\d+)?)\s*([KMGT]?B?)$', size_str)
+        if not match:
+            # Try to parse as plain number
+            try:
+                return int(float(size_str))
+            except ValueError:
+                raise ValueError(f"Invalid file size format: {size_str}")
+        
+        number, unit = match.groups()
+        number = float(number)
+        
+        # Convert to bytes
+        multipliers = {
+            '': 1,
+            'B': 1,
+            'KB': 1024,
+            'MB': 1024 ** 2,
+            'GB': 1024 ** 3,
+            'TB': 1024 ** 4,
+            'K': 1024,
+            'M': 1024 ** 2,
+            'G': 1024 ** 3,
+            'T': 1024 ** 4,
+        }
+        
+        multiplier = multipliers.get(unit, 1)
+        return int(number * multiplier)
+    
+    return int(size_str)
 
 
 class ErrorSeverity(Enum):

@@ -23,7 +23,7 @@ pipeline:
 # Ingestion configuration for academic documents
 ingest:
   # Focus on PDF documents primarily
-  file_types: ["pdf", "tex", "docx"]
+  file_types: ["pdf", "tex", "docx", "txt", "md", "html", "htm", "xhtml", "epub", "csv", "json", "jsonl", "tsv", "svg"]
   
   # Academic papers can be large
   max_file_size: "50MB"

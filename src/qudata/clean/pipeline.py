@@ -209,6 +209,7 @@ class ComprehensiveCleaningPipeline:
             result.validation_warnings = preprocessing_result.validation_warnings
             
             # Legacy fallback for older pipeline components if comprehensive preprocessing fails
+            current_text = text  # Initialize current_text
             if not preprocessing_result.validation_passed and preprocessing_result.processed_content:
                 current_text = preprocessing_result.processed_content
             elif not preprocessing_result.validation_passed:
