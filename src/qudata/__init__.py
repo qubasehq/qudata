@@ -11,7 +11,7 @@ This keeps `import qudata` and `from qudata import ...` fast and robust
 in minimal environments.
 """
 
-__version__ = "2.2.1"
+__version__ = "2.2.5"
 __author__ = "Qubase Team"
 
 __all__ = [
